@@ -31,6 +31,8 @@ pub const Tokenizer = struct {
         number,
         symbol,
         comment,
+        plus,
+        minus,
     };
 
     /// where are we?
@@ -68,10 +70,8 @@ pub const Tokenizer = struct {
                     if (is_whitespace(c)) {
                         tok.loc.start = self.idx + 1;
                     } else if (is_digit(c)) {
-                        tok.tag = .number;
                         state = .number;
                     } else if (is_alpha(c)) {
-                        tok.tag = .symbol;
                         state = .symbol;
                     } else {
                         // otherwise it is a single character to handle
@@ -87,8 +87,15 @@ pub const Tokenizer = struct {
                             ';' => {
                                 state = .comment;
                             },
+                            '+' => {
+                                state = .plus;
+                            },
+                            '-' => {
+                                state = .minus;
+                            },
                             else => {
                                 tok.tag = .unknown;
+                                break;
                             },
                         }
                     }
@@ -98,12 +105,14 @@ pub const Tokenizer = struct {
                 .number => {
                     if (!is_digit(c)) {
                         self.idx -= 1;
+                        tok.tag = .number;
                         break;
                     }
                 },
                 .symbol => {
                     if (!(is_symbol(c))) {
                         self.idx -= 1;
+                        tok.tag = .symbol;
                         break;
                     }
                 },
@@ -115,6 +124,21 @@ pub const Tokenizer = struct {
                             state = .start;
                         },
                         else => {},
+                    }
+                },
+                .plus, .minus => {
+                    // if we hit a delimiter then this is a single element symbol
+                    if (is_delim(c)) {
+                        self.idx -= 1;
+                        tok.tag = .symbol;
+                        break;
+                    }
+
+                    // if its a number then this is a number
+                    if (is_digit(c)) {
+                        state = .number;
+                    } else {
+                        state = .symbol;
                     }
                 },
             }
@@ -234,20 +258,29 @@ test "get next token" {
     }
 }
 
-test "malformed number" {
+test "numbers" {
     const code =
         \\125?3
+        \\(+ -32)
     ;
 
     const expected_str = [_][]const u8{
         "125",
         "?",
         "3",
+        "(",
+        "+",
+        "-32",
+        ")",
     };
     const expected_tag = [_]Tag{
         .number,
         .unknown,
         .number,
+        .lparen,
+        .symbol,
+        .number,
+        .rparen,
     };
 
     var tok = Tokenizer.init(code);
