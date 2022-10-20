@@ -21,6 +21,8 @@ pub const Tag = enum {
     divide,
     modulus,
 
+    period,
+
     unknown,
 };
 
@@ -41,6 +43,7 @@ pub const Scanner = struct {
         // starts with a symbol that may be
         // a number
         maybe_number,
+        period,
     };
 
     /// where are we?
@@ -99,6 +102,9 @@ pub const Scanner = struct {
                                 state = .maybe_number;
                                 tok.tag = .plus;
                             },
+                            '.' => {
+                                state = .period;
+                            },
                             '-' => {
                                 state = .maybe_number;
                                 tok.tag = .minus;
@@ -125,10 +131,15 @@ pub const Scanner = struct {
                     // otherwise it must be a symbol character
                 },
                 .number => {
+                    // TODO: handle floating point numbers
                     if (!is_digit(c)) {
-                        self.idx -= 1;
-                        tok.tag = .number;
-                        break;
+                        if (c == '.') {
+                            state = .period;
+                        } else {
+                            self.idx -= 1;
+                            tok.tag = .number;
+                            break;
+                        }
                     }
                 },
                 .symbol => {
@@ -160,6 +171,20 @@ pub const Scanner = struct {
                     if (is_digit(c)) {
                         state = .number;
                     } else {
+                        state = .symbol;
+                    }
+                },
+                .period => {
+                    // if we hit a delimiter then this is
+                    // a period
+                    if (is_delim(c)) {
+                        self.idx -= 1;
+                        tok.tag = .period;
+                        break;
+                    } else if (is_digit(c)) {
+                        state = .number;
+                    } else {
+                        // otherwise its a symbol
                         state = .symbol;
                     }
                 },
@@ -284,6 +309,7 @@ test "valid symbol" {
     const code =
         \\symbol!
         \\symbol?
+        \\.symbol
         \\sym->bol
         \\sym!$%&*+-./:>=>?@^_~all
     ;
@@ -291,6 +317,7 @@ test "valid symbol" {
     const expected_str = [_][]const u8{
         "symbol!",
         "symbol?",
+        ".symbol",
         "sym->bol",
         "sym!$%&*+-./:>=>?@^_~all",
     };
@@ -320,7 +347,8 @@ test "numbers" {
     const code =
         \\125?3
         \\(+ -32)
-        \\- */ %
+        \\- */ % .
+        \\12.4 0.5 .2
     ;
 
     const expected_str = [_][]const u8{
@@ -335,6 +363,10 @@ test "numbers" {
         "*",
         "/",
         "%",
+        ".",
+        "12.4",
+        "0.5",
+        ".2",
     };
     const expected_tag = [_]Tag{
         .number,
@@ -348,6 +380,10 @@ test "numbers" {
         .times,
         .divide,
         .modulus,
+        .period,
+        .number,
+        .number,
+        .number,
     };
 
     var scan = Scanner.init(code);
