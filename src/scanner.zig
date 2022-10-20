@@ -30,7 +30,7 @@ pub const Token = struct {
     loc: Loc,
 };
 
-pub const Tokenizer = struct {
+pub const Scanner = struct {
     const Self = @This();
 
     const State = enum {
@@ -241,8 +241,8 @@ test "init" {
         \\ (hello world)
     ;
 
-    var tok = Tokenizer.init(code);
-    _ = tok;
+    var scan = Scanner.init(code);
+    _ = scan;
 }
 
 test "get next token" {
@@ -265,12 +265,12 @@ test "get next token" {
         .rparen,
     };
 
-    var tok = Tokenizer.init(code);
+    var scan = Scanner.init(code);
     var i: usize = 0;
-    while (tok.next()) |t| {
+    while (scan.next()) |t| {
         try testing.expect(std.mem.eql(
             u8,
-            tok.buf[t.loc.start..t.loc.end],
+            scan.buf[t.loc.start..t.loc.end],
             expected_str[i],
         ));
         try testing.expect(t.tag == expected_tag[i]);
@@ -301,12 +301,12 @@ test "valid symbol" {
         .symbol,
     };
 
-    var tok = Tokenizer.init(code);
+    var scan = Scanner.init(code);
     var i: usize = 0;
-    while (tok.next()) |t| {
+    while (scan.next()) |t| {
         try testing.expect(std.mem.eql(
             u8,
-            tok.buf[t.loc.start..t.loc.end],
+            scan.buf[t.loc.start..t.loc.end],
             expected_str[i],
         ));
         try testing.expect(t.tag == expected_tag[i]);
@@ -350,12 +350,12 @@ test "numbers" {
         .modulus,
     };
 
-    var tok = Tokenizer.init(code);
+    var scan = Scanner.init(code);
     var i: usize = 0;
-    while (tok.next()) |t| {
+    while (scan.next()) |t| {
         try testing.expect(std.mem.eql(
             u8,
-            tok.buf[t.loc.start..t.loc.end],
+            scan.buf[t.loc.start..t.loc.end],
             expected_str[i],
         ));
         try testing.expect(t.tag == expected_tag[i]);
@@ -383,12 +383,12 @@ test "comment" {
         .symbol,
     };
 
-    var tok = Tokenizer.init(code);
+    var scan = Scanner.init(code);
     var i: usize = 0;
-    while (tok.next()) |t| {
+    while (scan.next()) |t| {
         try testing.expect(std.mem.eql(
             u8,
-            tok.buf[t.loc.start..t.loc.end],
+            scan.buf[t.loc.start..t.loc.end],
             expected_str[i],
         ));
         try testing.expect(t.tag == expected_tag[i]);
