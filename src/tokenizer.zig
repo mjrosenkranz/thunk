@@ -14,6 +14,13 @@ pub const Tag = enum {
     symbol,
     number,
 
+    // math symbols
+    plus,
+    minus,
+    times,
+    divide,
+    modulus,
+
     unknown,
 };
 
@@ -31,8 +38,9 @@ pub const Tokenizer = struct {
         number,
         symbol,
         comment,
-        plus,
-        minus,
+        // starts with a symbol that may be
+        // a number
+        maybe_number,
     };
 
     /// where are we?
@@ -88,10 +96,24 @@ pub const Tokenizer = struct {
                                 state = .comment;
                             },
                             '+' => {
-                                state = .plus;
+                                state = .maybe_number;
+                                tok.tag = .plus;
                             },
                             '-' => {
-                                state = .minus;
+                                state = .maybe_number;
+                                tok.tag = .minus;
+                            },
+                            '*' => {
+                                tok.tag = .times;
+                                break;
+                            },
+                            '/' => {
+                                tok.tag = .divide;
+                                break;
+                            },
+                            '%' => {
+                                tok.tag = .modulus;
+                                break;
                             },
                             else => {
                                 tok.tag = .unknown;
@@ -126,11 +148,11 @@ pub const Tokenizer = struct {
                         else => {},
                     }
                 },
-                .plus, .minus => {
-                    // if we hit a delimiter then this is a single element symbol
+                .maybe_number => {
+                    // if we hit a delimiter then this is
+                    // an identifier
                     if (is_delim(c)) {
                         self.idx -= 1;
-                        tok.tag = .symbol;
                         break;
                     }
 
@@ -258,10 +280,47 @@ test "get next token" {
     }
 }
 
+test "valid symbol" {
+    const code =
+        \\symbol!
+        \\symbol?
+        \\sym->bol
+        \\sym!$%&*+-./:>=>?@^_~all
+    ;
+
+    const expected_str = [_][]const u8{
+        "symbol!",
+        "symbol?",
+        "sym->bol",
+        "sym!$%&*+-./:>=>?@^_~all",
+    };
+    const expected_tag = [_]Tag{
+        .symbol,
+        .symbol,
+        .symbol,
+        .symbol,
+    };
+
+    var tok = Tokenizer.init(code);
+    var i: usize = 0;
+    while (tok.next()) |t| {
+        try testing.expect(std.mem.eql(
+            u8,
+            tok.buf[t.loc.start..t.loc.end],
+            expected_str[i],
+        ));
+        try testing.expect(t.tag == expected_tag[i]);
+        _ = expected_tag[i];
+
+        i += 1;
+    }
+}
+
 test "numbers" {
     const code =
         \\125?3
         \\(+ -32)
+        \\- */ %
     ;
 
     const expected_str = [_][]const u8{
@@ -272,15 +331,23 @@ test "numbers" {
         "+",
         "-32",
         ")",
+        "-",
+        "*",
+        "/",
+        "%",
     };
     const expected_tag = [_]Tag{
         .number,
         .unknown,
         .number,
         .lparen,
-        .symbol,
+        .plus,
         .number,
         .rparen,
+        .minus,
+        .times,
+        .divide,
+        .modulus,
     };
 
     var tok = Tokenizer.init(code);
