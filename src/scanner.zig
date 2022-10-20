@@ -23,6 +23,14 @@ pub const Tag = enum {
 
     period,
 
+    // quotes and stuff
+    quote,
+    single_quote,
+    backtick,
+    comma,
+    backslash,
+    sharp,
+
     unknown,
 };
 
@@ -121,6 +129,31 @@ pub const Scanner = struct {
                                 tok.tag = .modulus;
                                 break;
                             },
+
+                            '"' => {
+                                tok.tag = .quote;
+                                break;
+                            },
+                            '\'' => {
+                                tok.tag = .single_quote;
+                                break;
+                            },
+                            '`' => {
+                                tok.tag = .backtick;
+                                break;
+                            },
+                            ',' => {
+                                tok.tag = .comma;
+                                break;
+                            },
+                            '\\' => {
+                                tok.tag = .backslash;
+                                break;
+                            },
+                            '#' => {
+                                tok.tag = .sharp;
+                                break;
+                            },
                             else => {
                                 tok.tag = .unknown;
                                 break;
@@ -131,7 +164,6 @@ pub const Scanner = struct {
                     // otherwise it must be a symbol character
                 },
                 .number => {
-                    // TODO: handle floating point numbers
                     if (!is_digit(c)) {
                         if (c == '.') {
                             state = .period;
@@ -417,6 +449,48 @@ test "comment" {
         .number,
         .lparen,
         .symbol,
+    };
+
+    var scan = Scanner.init(code);
+    var i: usize = 0;
+    while (scan.next()) |t| {
+        try testing.expect(std.mem.eql(
+            u8,
+            scan.buf[t.loc.start..t.loc.end],
+            expected_str[i],
+        ));
+        try testing.expect(t.tag == expected_tag[i]);
+        _ = expected_tag[i];
+
+        i += 1;
+    }
+}
+
+test "special characters" {
+    const code =
+        \\" ' ` , \ #
+    ;
+
+    const expected_str = [_][]const u8{
+        \\"
+        ,
+        \\'
+        ,
+        \\`
+        ,
+        \\,
+        ,
+        \\\
+        ,
+        \\#
+    };
+    const expected_tag = [_]Tag{
+        .quote,
+        .single_quote,
+        .backtick,
+        .comma,
+        .backslash,
+        .sharp,
     };
 
     var scan = Scanner.init(code);
