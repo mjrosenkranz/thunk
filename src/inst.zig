@@ -40,6 +40,11 @@ pub const Inst = union(enum) {
     /// adds the values in the last two registers together and stores
     /// the result in the first
     add: Arg3,
-    /// adds adds the immediate in s to a register and stores it in there
+    /// adds the immediate in s to a register and stores it in there
     addimm: ArgU,
+    /// subtracts the values in the last two registers together and stores
+    /// the result in the first
+    sub: Arg3,
+    /// subtracts the immediate in s to a register and stores it in there
+    subimm: ArgU,
 };

@@ -117,6 +117,23 @@ pub const Chunk = struct {
                     self.imms[args.u],
                 });
             },
+            .sub => |args| {
+                std.debug.print(offset_fmt ++ "sub: reg[{}] = reg[{}] + reg[{}]\n", .{
+                    offset,
+                    args.a,
+                    args.b,
+                    args.c,
+                });
+            },
+            .subimm => |args| {
+                std.debug.print(offset_fmt ++ "subimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
+                    offset,
+                    args.a,
+                    args.a,
+                    args.u,
+                    self.imms[args.u],
+                });
+            },
         }
     }
 };
