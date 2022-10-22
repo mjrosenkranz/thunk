@@ -66,6 +66,9 @@ pub const Scanner = struct {
     }
 
     pub fn next(self: *Self) ?Token {
+        if (self.idx == self.buf.len)
+            return null;
+
         var tok = Token{
             .tag = .unknown,
             .loc = .{
@@ -76,11 +79,6 @@ pub const Scanner = struct {
 
         var state: State = .start;
         while (true) {
-            // nothing left, return
-            if (self.idx == self.buf.len) {
-                return null;
-            }
-
             const c = self.buf[self.idx];
 
             switch (state) {
@@ -90,8 +88,10 @@ pub const Scanner = struct {
                         tok.loc.start = self.idx + 1;
                     } else if (is_digit(c)) {
                         state = .number;
+                        tok.tag = .number;
                     } else if (is_alpha(c)) {
                         state = .symbol;
+                        tok.tag = .symbol;
                     } else {
                         // otherwise it is a single character to handle
                         switch (c) {
@@ -169,7 +169,6 @@ pub const Scanner = struct {
                             state = .period;
                         } else {
                             self.idx -= 1;
-                            tok.tag = .number;
                             break;
                         }
                     }
@@ -202,8 +201,10 @@ pub const Scanner = struct {
                     // if its a number then this is a number
                     if (is_digit(c)) {
                         state = .number;
+                        tok.tag = .number;
                     } else {
                         state = .symbol;
+                        tok.tag = .symbol;
                     }
                 },
                 .period => {
@@ -215,18 +216,28 @@ pub const Scanner = struct {
                         break;
                     } else if (is_digit(c)) {
                         state = .number;
+                        tok.tag = .number;
                     } else {
                         // otherwise its a symbol
                         state = .symbol;
+                        tok.tag = .symbol;
                     }
                 },
             }
 
-            self.idx += 1;
+            // nothing left, return
+            const new_idx = self.idx + 1;
+            if (new_idx == self.buf.len) {
+                break;
+            } else {
+                self.idx = new_idx;
+            }
         }
 
         self.idx += 1;
         tok.loc.end = self.idx;
+
+        if (state == .comment) return null;
 
         return tok;
     }
@@ -354,6 +365,7 @@ test "valid symbol" {
         "sym!$%&*+-./:>=>?@^_~all",
     };
     const expected_tag = [_]Tag{
+        .symbol,
         .symbol,
         .symbol,
         .symbol,
@@ -506,4 +518,50 @@ test "special characters" {
 
         i += 1;
     }
+}
+
+test "just a number" {
+    const code =
+        \\125
+    ;
+
+    const expected_str = [_][]const u8{
+        "125",
+    };
+    const expected_tag = [_]Tag{
+        .number,
+    };
+
+    var scan = Scanner.init(code);
+    var i: usize = 0;
+    const t = scan.next().?;
+    try testing.expect(t.tag == expected_tag[i]);
+    try testing.expect(std.mem.eql(
+        u8,
+        scan.buf[t.loc.start..t.loc.end],
+        expected_str[i],
+    ));
+}
+
+test "just a symbol" {
+    const code =
+        \\symbol
+    ;
+
+    const expected_str = [_][]const u8{
+        "symbol",
+    };
+    const expected_tag = [_]Tag{
+        .symbol,
+    };
+
+    var scan = Scanner.init(code);
+    var i: usize = 0;
+    const t = scan.next().?;
+    try testing.expect(t.tag == expected_tag[i]);
+    try testing.expect(std.mem.eql(
+        u8,
+        scan.buf[t.loc.start..t.loc.end],
+        expected_str[i],
+    ));
 }
