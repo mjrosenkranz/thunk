@@ -88,31 +88,31 @@ pub const Chunk = struct {
         switch (inst) {
             .ret => |args| std.debug.print(offset_fmt ++ "ret: a: {} b: {} c: {}\n", .{
                 offset,
-                args.a,
-                args.b,
-                args.c,
+                args.r,
+                args.r1,
+                args.r2,
             }),
             .load => |args| {
                 std.debug.print(offset_fmt ++ "load: imm[{}] ({d:.1}) into reg{}\n", .{
                     offset,
                     args.u,
                     self.imms[args.u],
-                    args.a,
+                    args.r,
                 });
             },
             .add => |args| {
                 std.debug.print(offset_fmt ++ "add: reg[{}] = reg[{}] + reg[{}]\n", .{
                     offset,
-                    args.a,
-                    args.b,
-                    args.c,
+                    args.r,
+                    args.r1,
+                    args.r2,
                 });
             },
             .addimm => |args| {
                 std.debug.print(offset_fmt ++ "addimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
                     offset,
-                    args.a,
-                    args.a,
+                    args.r,
+                    args.r,
                     args.u,
                     self.imms[args.u],
                 });
@@ -120,16 +120,16 @@ pub const Chunk = struct {
             .sub => |args| {
                 std.debug.print(offset_fmt ++ "sub: reg[{}] = reg[{}] + reg[{}]\n", .{
                     offset,
-                    args.a,
-                    args.b,
-                    args.c,
+                    args.r,
+                    args.r1,
+                    args.r2,
                 });
             },
             .subimm => |args| {
                 std.debug.print(offset_fmt ++ "subimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
                     offset,
-                    args.a,
-                    args.a,
+                    args.r,
+                    args.r,
                     args.u,
                     self.imms[args.u],
                 });

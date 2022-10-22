@@ -1,5 +1,5 @@
 const std = @import("std");
-/// Insructions that are our bytecode
+/// Instructions that are our bytecode
 /// all instructions are the same size (32 bits)
 /// to maintain alignment
 pub const Inst = union(enum) {
@@ -14,20 +14,20 @@ pub const Inst = union(enum) {
 
     /// arguments for instruction with three arguments
     pub const Arg3 = packed struct {
-        a: u8 = 0,
-        b: u8 = 0,
-        c: u8 = 0,
+        r: u8 = 0,
+        r1: u8 = 0,
+        r2: u8 = 0,
     };
 
     /// arguments for instruction with one signed argument
     pub const ArgS = packed struct {
-        a: u8 = 0,
+        r: u8 = 0,
         s: i16 = 0,
     };
 
     /// arguments for instruction with an unsigned argument
     pub const ArgU = packed struct {
-        a: u8 = 0,
+        r: u8 = 0,
         u: u16 = 0,
     };
 

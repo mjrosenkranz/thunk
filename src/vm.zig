@@ -45,19 +45,19 @@ pub const Vm = struct {
                 .ret => return,
                 // nothing to do with a load for now so we can just print it
                 .load => |args| {
-                    self.regs[args.a] = chunk.imms[args.u];
+                    self.regs[args.r] = chunk.imms[args.u];
                 },
                 .add => |args| {
-                    self.regs[args.a] = self.regs[args.b] + self.regs[args.c];
+                    self.regs[args.r] = self.regs[args.r1] + self.regs[args.r2];
                 },
                 .addimm => |args| {
-                    self.regs[args.a] = self.regs[args.a] + chunk.imms[args.u];
+                    self.regs[args.r] = self.regs[args.r] + chunk.imms[args.u];
                 },
                 .sub => |args| {
-                    self.regs[args.a] = self.regs[args.b] - self.regs[args.c];
+                    self.regs[args.r] = self.regs[args.r1] - self.regs[args.r2];
                 },
                 .subimm => |args| {
-                    self.regs[args.a] = self.regs[args.a] - chunk.imms[args.u];
+                    self.regs[args.r] = self.regs[args.r] - chunk.imms[args.u];
                 },
             }
 
@@ -114,7 +114,7 @@ test "load a value" {
 
     var chunk = Chunk{};
     // load first constant into register 2
-    _ = try chunk.pushInst(.{ .load = .{ .a = 2, .u = try chunk.pushImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = 2, .u = try chunk.pushImm(3) } });
     // return nada
     _ = try chunk.pushInst(.{ .ret = .{} });
 
@@ -134,11 +134,11 @@ test "load some values and add them" {
 
     var chunk = Chunk{};
     // load a constant into b
-    _ = try chunk.pushInst(.{ .load = .{ .a = b, .u = try chunk.pushImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = b, .u = try chunk.pushImm(3) } });
     // load a constant into c
-    _ = try chunk.pushInst(.{ .load = .{ .a = c, .u = try chunk.pushImm(2) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = c, .u = try chunk.pushImm(2) } });
     // a = b + c
-    _ = try chunk.pushInst(.{ .add = .{ .a = a, .b = b, .c = c } });
+    _ = try chunk.pushInst(.{ .add = .{ .r = a, .r1 = b, .r2 = c } });
     // return nada
     _ = try chunk.pushInst(.{ .ret = .{} });
 
@@ -161,11 +161,11 @@ test "add and store in same register" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(.{ .load = .{ .a = a, .u = try chunk.pushImm(7) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = a, .u = try chunk.pushImm(7) } });
     // load a constant into b
-    _ = try chunk.pushInst(.{ .load = .{ .a = b, .u = try chunk.pushImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = b, .u = try chunk.pushImm(3) } });
     // a = b + a
-    _ = try chunk.pushInst(.{ .add = .{ .a = a, .b = a, .c = b } });
+    _ = try chunk.pushInst(.{ .add = .{ .r = a, .r1 = a, .r2 = b } });
     // return nada
     _ = try chunk.pushInst(.{ .ret = .{} });
 
@@ -186,9 +186,9 @@ test "add immediate" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(.{ .load = .{ .a = a, .u = try chunk.pushImm(7) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = a, .u = try chunk.pushImm(7) } });
     // load a constant into b
-    _ = try chunk.pushInst(.{ .addimm = .{ .a = a, .u = try chunk.pushImm(3) } });
+    _ = try chunk.pushInst(.{ .addimm = .{ .r = a, .u = try chunk.pushImm(3) } });
     // return nada
     _ = try chunk.pushInst(.{ .ret = .{} });
 
@@ -211,13 +211,13 @@ test "subtract" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(.{ .load = .{ .a = a, .u = try chunk.pushImm(7) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = a, .u = try chunk.pushImm(7) } });
     // load a constant into b
-    _ = try chunk.pushInst(.{ .subimm = .{ .a = a, .u = try chunk.pushImm(3) } });
+    _ = try chunk.pushInst(.{ .subimm = .{ .r = a, .u = try chunk.pushImm(3) } });
 
-    _ = try chunk.pushInst(.{ .load = .{ .a = b, .u = try chunk.pushImm(4) } });
-    _ = try chunk.pushInst(.{ .load = .{ .a = c, .u = try chunk.pushImm(6) } });
-    _ = try chunk.pushInst(.{ .sub = .{ .a = d, .b = b, .c = c } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = b, .u = try chunk.pushImm(4) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = c, .u = try chunk.pushImm(6) } });
+    _ = try chunk.pushInst(.{ .sub = .{ .r = d, .r1 = b, .r2 = c } });
 
     // return nada
     _ = try chunk.pushInst(.{ .ret = .{} });
