@@ -2,7 +2,7 @@ const std = @import("std");
 /// Insructions that are our bytecode
 /// all instructions are the same size (32 bits)
 /// to maintain alignment
-pub const Inst = union(Op) {
+pub const Inst = union(enum) {
     // make sure our instructions are the right size
     comptime {
         std.debug.assert(@bitSizeOf(Arg3) == 24);
@@ -11,13 +11,6 @@ pub const Inst = union(Op) {
         std.debug.assert(@bitSizeOf(Inst) == 32);
         std.debug.assert(@sizeOf(Inst) == 4);
     }
-
-    /// OpCode for each instruction we support
-    pub const Op = enum {
-        ret,
-        load,
-        add,
-    };
 
     /// arguments for instruction with three arguments
     pub const Arg3 = packed struct {
@@ -47,4 +40,6 @@ pub const Inst = union(Op) {
     /// adds the values in the last two registers together and stores
     /// the result in the first
     add: Arg3,
+    /// adds adds the immediate in s to a register and stores it in there
+    addimm: ArgU,
 };

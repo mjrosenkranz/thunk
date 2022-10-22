@@ -50,6 +50,9 @@ pub const Vm = struct {
                 .add => |args| {
                     self.regs[args.a] = self.regs[args.b] + self.regs[args.c];
                 },
+                .addimm => |args| {
+                    self.regs[args.a] = self.regs[args.a] + chunk.imms[args.u];
+                },
             }
 
             self.ip += 1;
@@ -155,7 +158,7 @@ test "add and store in same register" {
     _ = try chunk.addInst(.{ .load = .{ .a = a, .u = try chunk.addImm(7) } });
     // load a constant into b
     _ = try chunk.addInst(.{ .load = .{ .a = b, .u = try chunk.addImm(3) } });
-    // a = b + c
+    // a = b + a
     _ = try chunk.addInst(.{ .add = .{ .a = a, .b = a, .c = b } });
     // return nada
     _ = try chunk.addInst(.{ .ret = .{} });
@@ -164,4 +167,26 @@ test "add and store in same register" {
 
     try testing.expectApproxEqAbs(@as(f32, 10.0), vm.regs[a], eps);
     try testing.expectApproxEqAbs(@as(f32, 3.0), vm.regs[b], eps);
+}
+
+test "add immediate" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    // the registers we are loading into
+    const a = 1;
+
+    const eps = std.math.epsilon(f32);
+
+    var chunk = Chunk{};
+    // load a constant into a
+    _ = try chunk.addInst(.{ .load = .{ .a = a, .u = try chunk.addImm(7) } });
+    // load a constant into b
+    _ = try chunk.addInst(.{ .addimm = .{ .a = a, .u = try chunk.addImm(3) } });
+    // return nada
+    _ = try chunk.addInst(.{ .ret = .{} });
+
+    try vm.exec(&chunk);
+
+    try testing.expectApproxEqAbs(@as(f32, 10.0), vm.regs[a], eps);
 }

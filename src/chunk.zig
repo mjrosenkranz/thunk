@@ -108,6 +108,15 @@ pub const Chunk = struct {
                     args.c,
                 });
             },
+            .addimm => |args| {
+                std.debug.print(offset_fmt ++ "addimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
+                    offset,
+                    args.a,
+                    args.a,
+                    args.u,
+                    self.imms[args.u],
+                });
+            },
         }
     }
 };
