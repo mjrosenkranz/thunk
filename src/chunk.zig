@@ -1,5 +1,5 @@
 const std = @import("std");
-const Inst = @import("vm.zig").Inst;
+const Inst = @import("inst.zig").Inst;
 // start with only one kind of value
 const Value = f32;
 

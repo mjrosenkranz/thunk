@@ -1,18 +1,4 @@
 const std = @import("std");
-const Chunk = @import("chunk.zig").Chunk;
-const Inst = @import("inst.zig").Inst;
-/// virtual machine for interpreting our op-codes
-pub const VM = struct {
-    const Self = @This();
-    pub fn init() Self {
-        return .{};
-    }
-
-    pub fn deinit(self: Self) void {
-        _ = self;
-    }
-};
-
 /// Insructions that are our bytecode
 /// all instructions are the same size (32 bits)
 /// to maintain alignment
@@ -27,7 +13,7 @@ pub const Inst = union(Op) {
     }
 
     /// OpCode for each instruction we support
-    pub const Op = enum(u8) {
+    pub const Op = enum {
         /// return from a function
         ret,
         /// loads a constant into a target register
@@ -55,13 +41,8 @@ pub const Inst = union(Op) {
 
     const Self = @This();
 
-    /// has no arguments
-    ret: void,
+    /// returns values in the registers a to b
+    ret: Arg3,
     /// loads immediate value stored at u into register a
     load: ArgU,
 };
-
-test "init vm" {
-    var vm = VM.init();
-    defer vm.deinit();
-}
