@@ -59,6 +59,18 @@ pub const Vm = struct {
                 .subimm => |args| {
                     self.regs[args.r] = self.regs[args.r] - chunk.imms[args.u];
                 },
+                .mul => |args| {
+                    self.regs[args.r] = self.regs[args.r1] * self.regs[args.r2];
+                },
+                .mulimm => |args| {
+                    self.regs[args.r] = self.regs[args.r] * chunk.imms[args.u];
+                },
+                .div => |args| {
+                    self.regs[args.r] = self.regs[args.r1] / self.regs[args.r2];
+                },
+                .divimm => |args| {
+                    self.regs[args.r] = self.regs[args.r] / chunk.imms[args.u];
+                },
             }
 
             self.ip += 1;
@@ -228,4 +240,70 @@ test "subtract" {
     try testing.expectApproxEqAbs(@as(f32, 4), vm.regs[b], eps);
     try testing.expectApproxEqAbs(@as(f32, 6), vm.regs[c], eps);
     try testing.expectApproxEqAbs(@as(f32, -2), vm.regs[d], eps);
+}
+
+test "multiply" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    // the registers we are loading into
+    const a = 1;
+    const b = 2;
+    const c = 3;
+    const d = 4;
+
+    const eps = std.math.epsilon(f32);
+
+    var chunk = Chunk{};
+    // load a constant into a
+    _ = try chunk.pushInst(.{ .load = .{ .r = a, .u = try chunk.pushImm(7) } });
+    // load a constant into b
+    _ = try chunk.pushInst(.{ .mulimm = .{ .r = a, .u = try chunk.pushImm(3) } });
+
+    _ = try chunk.pushInst(.{ .load = .{ .r = b, .u = try chunk.pushImm(-4) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = c, .u = try chunk.pushImm(6) } });
+    _ = try chunk.pushInst(.{ .mul = .{ .r = d, .r1 = b, .r2 = c } });
+
+    // return nada
+    _ = try chunk.pushInst(.{ .ret = .{} });
+
+    try vm.exec(&chunk);
+
+    try testing.expectApproxEqAbs(@as(f32, 21), vm.regs[a], eps);
+    try testing.expectApproxEqAbs(@as(f32, -4), vm.regs[b], eps);
+    try testing.expectApproxEqAbs(@as(f32, 6), vm.regs[c], eps);
+    try testing.expectApproxEqAbs(@as(f32, -24), vm.regs[d], eps);
+}
+
+test "divide" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    // the registers we are loading into
+    const a = 1;
+    const b = 2;
+    const c = 3;
+    const d = 4;
+
+    const eps = std.math.epsilon(f32);
+
+    var chunk = Chunk{};
+    // load a constant into a
+    _ = try chunk.pushInst(.{ .load = .{ .r = a, .u = try chunk.pushImm(8) } });
+    // load a constant into b
+    _ = try chunk.pushInst(.{ .divimm = .{ .r = a, .u = try chunk.pushImm(4) } });
+
+    _ = try chunk.pushInst(.{ .load = .{ .r = b, .u = try chunk.pushImm(6) } });
+    _ = try chunk.pushInst(.{ .load = .{ .r = c, .u = try chunk.pushImm(-4) } });
+    _ = try chunk.pushInst(.{ .div = .{ .r = d, .r1 = b, .r2 = c } });
+
+    // return nada
+    _ = try chunk.pushInst(.{ .ret = .{} });
+
+    try vm.exec(&chunk);
+
+    try testing.expectApproxEqAbs(@as(f32, 2.0), vm.regs[a], eps);
+    try testing.expectApproxEqAbs(@as(f32, 6), vm.regs[b], eps);
+    try testing.expectApproxEqAbs(@as(f32, -4), vm.regs[c], eps);
+    try testing.expectApproxEqAbs(@as(f32, -1.5), vm.regs[d], eps);
 }

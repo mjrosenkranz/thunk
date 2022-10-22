@@ -5,6 +5,8 @@ const std = @import("std");
 pub const Inst = union(enum) {
     // make sure our instructions are the right size
     comptime {
+        // TODO: might be able to squeeze some more bits into
+        // the argument depending on the number of instructions we use
         std.debug.assert(@bitSizeOf(Arg3) == 24);
         std.debug.assert(@bitSizeOf(ArgS) == 24);
         std.debug.assert(@bitSizeOf(ArgU) == 24);
@@ -42,9 +44,19 @@ pub const Inst = union(enum) {
     add: Arg3,
     /// adds the immediate in s to a register and stores it in there
     addimm: ArgU,
+    /// multiplies the values in the last two registers together and stores
+    /// the result in the first
+    mul: Arg3,
+    /// multiplies the immediate in s to a register and stores it in there
+    mulimm: ArgU,
     /// subtracts the values in the last two registers together and stores
     /// the result in the first
     sub: Arg3,
     /// subtracts the immediate in s to a register and stores it in there
     subimm: ArgU,
+    /// divides the values in the last two registers together and stores
+    /// the result in the first
+    div: Arg3,
+    /// divides the immediate in s to a register and stores it in there
+    divimm: ArgU,
 };
