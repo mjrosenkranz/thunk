@@ -14,7 +14,7 @@ pub const VM = struct {
 /// Insructions that are our bytecode
 /// all instructions are the same size (32 bits)
 /// to maintain alignment
-const Inst = union(Op) {
+pub const Inst = union(Op) {
     // make sure our instructions are the right size
     comptime {
         std.debug.assert(@bitSizeOf(Arg3) == 24);
@@ -53,106 +53,11 @@ const Inst = union(Op) {
 
     const Self = @This();
 
+    /// has no arguments
     ret: void,
+    /// loads immediate value stored at u into register a
     load: ArgU,
-
-    /// print's an instruction, used for debug only
-    pub fn print(self: Self) void {
-        switch (self) {
-            .ret => std.debug.print("return\n", .{}),
-            .load => |args| {
-                std.debug.print("load: {}\n", .{args.u});
-            },
-        }
-    }
 };
-
-// start with only one kind of value
-const Value = f32;
-
-/// A collection of instructions and acompanying data
-pub const Chunk = struct {
-    const Self = @This();
-
-    const MAX_INST = 1024;
-    const MAX_IMMS = 1024;
-
-    /// instructions that make up this chunk
-    code: [MAX_INST]Inst = undefined,
-    /// offset in the inst array
-    code_offset: usize = 0,
-    /// immediate values that might be refered to
-    imms: [MAX_IMMS]Value = undefined,
-    /// offset in the imms array
-    imms_offset: usize = 0,
-
-    /// Add an instruction to this chunk
-    /// returns an error if there are too many instructions
-    /// or imms in this chunk
-    pub fn addInst(self: *Self, inst: Inst) !usize {
-        if (self.code_offset >= MAX_INST) {
-            return error.TooManyInstructions;
-        }
-
-        const offset = self.code_offset;
-        self.code_offset += 1;
-
-        self.code[offset] = inst;
-
-        return offset;
-    }
-
-    /// Adds a slice of instructions to this chunk.
-    /// if the slice is too big then an error is returned imediately
-    pub fn addInstSlice(self: *Self, insts: []const Inst) !usize {
-        const total_offset = self.code_offset + insts.len;
-        if (total_offset >= MAX_INST) {
-            return error.TooManyInstructions;
-        }
-        for (insts) |inst| {
-            _ = try self.addInst(inst);
-        }
-
-        return total_offset;
-    }
-
-    pub fn addImm(self: *Self, imm: Value) !usize {
-        if (self.imms_offset >= MAX_IMMS) {
-            return error.TooManyImmediates;
-        }
-
-        const offset = self.imms_offset;
-        self.imms_offset += 1;
-
-        self.imms[offset] = imm;
-
-        return offset;
-    }
-
-    pub fn clear(self: *Self) void {
-        self.* = Self{};
-    }
-};
-
-test "chunk" {
-    var chunk = Chunk{};
-    _ = try chunk.addInst(.{ .ret = {} });
-    const off = try chunk.addInstSlice(&.{
-        .{ .load = .{ .u = 13 } },
-        .{ .ret = {} },
-    });
-    try std.testing.expect(chunk.code_offset == 3);
-    try std.testing.expect(chunk.code_offset == off);
-    var i: usize = 0;
-    while (i < chunk.code_offset) : (i += 1) {
-        chunk.code[i].print();
-    }
-
-    chunk.clear();
-    try std.testing.expect(chunk.code_offset == 0);
-
-    _ = try chunk.addImm(23);
-}
 
 test "init vm" {
     var vm = VM.init();
