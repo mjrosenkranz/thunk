@@ -19,6 +19,10 @@ pub const Chunk = struct {
     /// offset in the imms array
     n_imms: usize = 0,
 
+    pub fn clear(self: *Self) void {
+        self.* = Self{};
+    }
+
     /// Add an instruction to this chunk
     /// returns an error if there are too many instructions
     /// or imms in this chunk
@@ -62,8 +66,10 @@ pub const Chunk = struct {
         return offset;
     }
 
-    pub fn clear(self: *Self) void {
-        self.* = Self{};
+    pub fn fromSlice(insts: []const Inst) !Self {
+        var self = Chunk{};
+        _ = try self.addInstSlice(insts);
+        return self;
     }
 
     /// print's an instruction, used for debug only
@@ -75,7 +81,11 @@ pub const Chunk = struct {
         var i: usize = 0;
         while (i < self.n_inst) : (i += 1) {
             switch (self.code[i]) {
-                .ret => std.debug.print("ret\n", .{}),
+                .ret => |args| std.debug.print("ret: a: {} b: {} c: {}\n", .{
+                    args.a,
+                    args.b,
+                    args.c,
+                }),
                 .load => |args| {
                     std.debug.print("load: imm[{}] ({d:.1}) into reg{}\n", .{
                         args.u,
@@ -90,10 +100,10 @@ pub const Chunk = struct {
 
 test "chunk" {
     var chunk = Chunk{};
-    _ = try chunk.addInst(.{ .ret = {} });
+    _ = try chunk.addInst(.{ .ret = .{} });
     const off = try chunk.addInstSlice(&.{
         .{ .load = .{ .u = 0 } },
-        .{ .ret = {} },
+        .{ .ret = .{} },
     });
     try std.testing.expect(chunk.n_inst == 3);
     try std.testing.expect(chunk.n_inst == off);
