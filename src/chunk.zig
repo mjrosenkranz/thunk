@@ -72,28 +72,35 @@ pub const Chunk = struct {
         return self;
     }
 
-    /// print's an instruction, used for debug only
-    pub fn print(self: Self) void {
+    /// disassemble an instruction, used for debug only
+    pub fn disassemble(self: Self) void {
         std.debug.print("chunk code_len: {} imms_len: {}\n", .{
             self.n_inst,
             self.n_imms,
         });
         var i: usize = 0;
         while (i < self.n_inst) : (i += 1) {
-            switch (self.code[i]) {
-                .ret => |args| std.debug.print("ret: a: {} b: {} c: {}\n", .{
+            self.disassembleInst(i, self.code[i]);
+        }
+    }
+
+    pub inline fn disassembleInst(self: Self, offset: usize, inst: Inst) void {
+        const offset_fmt = "{d:0>4}: ";
+        switch (inst) {
+            .ret => |args| std.debug.print(offset_fmt ++ "ret: a: {} b: {} c: {}\n", .{
+                offset,
+                args.a,
+                args.b,
+                args.c,
+            }),
+            .load => |args| {
+                std.debug.print(offset_fmt ++ "load: imm[{}] ({d:.1}) into reg{}\n", .{
+                    offset,
+                    args.u,
+                    self.imms[args.u],
                     args.a,
-                    args.b,
-                    args.c,
-                }),
-                .load => |args| {
-                    std.debug.print("load: imm[{}] ({d:.1}) into reg{}\n", .{
-                        args.u,
-                        self.imms[args.u],
-                        args.a,
-                    });
-                },
-            }
+                });
+            },
         }
     }
 };
@@ -111,7 +118,7 @@ test "chunk" {
     _ = try chunk.addImm(23.3);
 
     std.debug.print("\n", .{});
-    chunk.print();
+    chunk.disassemble();
 
     chunk.clear();
     try std.testing.expect(chunk.n_inst == 0);
