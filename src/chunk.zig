@@ -183,7 +183,7 @@ test "chunk" {
     try std.testing.expect(chunk.n_inst == 3);
     try std.testing.expect(chunk.n_inst == off);
 
-    _ = try chunk.pushImm(23.3);
+    _ = try chunk.pushImm(.{ .float = 23.3 });
 
     std.debug.print("\n", .{});
     chunk.disassemble();
