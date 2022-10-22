@@ -108,9 +108,9 @@ test "load a value" {
 
     var chunk = Chunk{};
     // load first constant into register 2
-    _ = try chunk.addInst(.{ .load = .{ .a = 2, .u = try chunk.addImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = 2, .u = try chunk.pushImm(3) } });
     // return nada
-    _ = try chunk.addInst(.{ .ret = .{} });
+    _ = try chunk.pushInst(.{ .ret = .{} });
 
     try vm.exec(&chunk);
 
@@ -128,13 +128,13 @@ test "load some values and add them" {
 
     var chunk = Chunk{};
     // load a constant into b
-    _ = try chunk.addInst(.{ .load = .{ .a = b, .u = try chunk.addImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = b, .u = try chunk.pushImm(3) } });
     // load a constant into c
-    _ = try chunk.addInst(.{ .load = .{ .a = c, .u = try chunk.addImm(2) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = c, .u = try chunk.pushImm(2) } });
     // a = b + c
-    _ = try chunk.addInst(.{ .add = .{ .a = a, .b = b, .c = c } });
+    _ = try chunk.pushInst(.{ .add = .{ .a = a, .b = b, .c = c } });
     // return nada
-    _ = try chunk.addInst(.{ .ret = .{} });
+    _ = try chunk.pushInst(.{ .ret = .{} });
 
     try vm.exec(&chunk);
 
@@ -155,13 +155,13 @@ test "add and store in same register" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.addInst(.{ .load = .{ .a = a, .u = try chunk.addImm(7) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = a, .u = try chunk.pushImm(7) } });
     // load a constant into b
-    _ = try chunk.addInst(.{ .load = .{ .a = b, .u = try chunk.addImm(3) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = b, .u = try chunk.pushImm(3) } });
     // a = b + a
-    _ = try chunk.addInst(.{ .add = .{ .a = a, .b = a, .c = b } });
+    _ = try chunk.pushInst(.{ .add = .{ .a = a, .b = a, .c = b } });
     // return nada
-    _ = try chunk.addInst(.{ .ret = .{} });
+    _ = try chunk.pushInst(.{ .ret = .{} });
 
     try vm.exec(&chunk);
 
@@ -180,11 +180,11 @@ test "add immediate" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.addInst(.{ .load = .{ .a = a, .u = try chunk.addImm(7) } });
+    _ = try chunk.pushInst(.{ .load = .{ .a = a, .u = try chunk.pushImm(7) } });
     // load a constant into b
-    _ = try chunk.addInst(.{ .addimm = .{ .a = a, .u = try chunk.addImm(3) } });
+    _ = try chunk.pushInst(.{ .addimm = .{ .a = a, .u = try chunk.pushImm(3) } });
     // return nada
-    _ = try chunk.addInst(.{ .ret = .{} });
+    _ = try chunk.pushInst(.{ .ret = .{} });
 
     try vm.exec(&chunk);
 

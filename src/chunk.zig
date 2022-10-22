@@ -25,7 +25,7 @@ pub const Chunk = struct {
     /// Add an instruction to this chunk
     /// returns an error if there are too many instructions
     /// or imms in this chunk
-    pub fn addInst(self: *Self, inst: Inst) !usize {
+    pub fn pushInst(self: *Self, inst: Inst) !usize {
         if (self.n_inst >= MAX_INST) {
             return error.TooManyInstructions;
         }
@@ -40,19 +40,19 @@ pub const Chunk = struct {
 
     /// Adds a slice of instructions to this chunk.
     /// if the slice is too big then an error is returned imediately
-    pub fn addInstSlice(self: *Self, insts: []const Inst) !usize {
+    pub fn pushInstSlice(self: *Self, insts: []const Inst) !usize {
         const total_offset = self.n_inst + insts.len;
         if (total_offset >= MAX_INST) {
             return error.TooManyInstructions;
         }
         for (insts) |inst| {
-            _ = try self.addInst(inst);
+            _ = try self.pushInst(inst);
         }
 
         return total_offset;
     }
 
-    pub fn addImm(self: *Self, imm: Value) !u16 {
+    pub fn pushImm(self: *Self, imm: Value) !u16 {
         if (self.n_imms >= MAX_IMMS) {
             return error.TooManyImmediates;
         }
@@ -67,7 +67,7 @@ pub const Chunk = struct {
 
     pub fn fromSlice(insts: []const Inst) !Self {
         var self = Chunk{};
-        _ = try self.addInstSlice(insts);
+        _ = try self.pushInstSlice(insts);
         return self;
     }
 
@@ -123,15 +123,15 @@ pub const Chunk = struct {
 
 test "chunk" {
     var chunk = Chunk{};
-    _ = try chunk.addInst(.{ .ret = .{} });
-    const off = try chunk.addInstSlice(&.{
+    _ = try chunk.pushInst(.{ .ret = .{} });
+    const off = try chunk.pushInstSlice(&.{
         .{ .load = .{ .u = 0 } },
         .{ .ret = .{} },
     });
     try std.testing.expect(chunk.n_inst == 3);
     try std.testing.expect(chunk.n_inst == off);
 
-    _ = try chunk.addImm(23.3);
+    _ = try chunk.pushImm(23.3);
 
     std.debug.print("\n", .{});
     chunk.disassemble();
