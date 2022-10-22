@@ -1,7 +1,6 @@
 const std = @import("std");
 const Inst = @import("inst.zig").Inst;
-// start with only one kind of value
-const Value = f32;
+const Value = @import("value.zig").Value;
 
 /// A collection of instructions and acompanying data
 pub const Chunk = struct {
@@ -53,7 +52,7 @@ pub const Chunk = struct {
         return total_offset;
     }
 
-    pub fn addImm(self: *Self, imm: Value) !usize {
+    pub fn addImm(self: *Self, imm: Value) !u16 {
         if (self.n_imms >= MAX_IMMS) {
             return error.TooManyImmediates;
         }
@@ -63,7 +62,7 @@ pub const Chunk = struct {
 
         self.imms[offset] = imm;
 
-        return offset;
+        return @intCast(u16, offset);
     }
 
     pub fn fromSlice(insts: []const Inst) !Self {
@@ -99,6 +98,14 @@ pub const Chunk = struct {
                     args.u,
                     self.imms[args.u],
                     args.a,
+                });
+            },
+            .add => |args| {
+                std.debug.print(offset_fmt ++ "add: reg[{}] = reg[{}] + reg[{}]\n", .{
+                    offset,
+                    args.a,
+                    args.b,
+                    args.c,
                 });
             },
         }
