@@ -11,10 +11,14 @@ const Loc = scan.Loc;
 
 // TODO: use these
 const CompileErrors = error{
-    ExpectedExpression,
-    ExpectedClosingParen,
-    InvalidCharacter,
     ChunkError,
+    // parsing
+    ExpectedEOF,
+    ExpectedSymbol,
+    // syntax
+    ExpectedClosingParen,
+    ExpectedOpeningParen,
+    InvalidCharacter,
 };
 
 /// Takes our source code and compiles it to bytecode for the vm
@@ -33,7 +37,7 @@ pub const Compiler = struct {
         try self.expr();
 
         // TODO: eof
-        // try self.parser.consume(.eof, error.ExpectedExpression);
+        try self.parser.consume(.eof, error.ExpectedEOF);
 
         return false;
     }
@@ -43,7 +47,7 @@ pub const Compiler = struct {
         switch (self.parser.curr.tag) {
             .symbol => {
                 // we have nothing to do for symbols rn
-                std.debug.print("compile-todo: symbol\n", .{});
+                try self.parser.consume(.symbol, error.ExpectedSymbol);
             },
             .number => {
                 try self.parser.consume(.number, error.ExpectedNumber);
@@ -57,10 +61,9 @@ pub const Compiler = struct {
                 self.parser.advance();
                 std.debug.print("compile-todo: plus\n", .{});
             },
-            // should only be here if theres a problem?
-            // .rparen => return,
+            .eof => return,
             else => {
-                std.debug.print("unexpected symbol {}\n", .{self.parser.curr.tag});
+                std.debug.print("unexpected tag {}\n", .{self.parser.curr.tag});
                 return error.ExpectedExpression;
             },
         }
@@ -69,8 +72,7 @@ pub const Compiler = struct {
     /// parses/compiles a non quoted list ()
     fn list(self: *Self) anyerror!void {
         while (true) {
-            std.debug.print("current {}\n", .{self.parser.curr.tag});
-            if (self.parser.curr.tag == .rparen) {
+            if (self.parser.curr.tag == .rparen or self.parser.curr.tag == .eof) {
                 try self.parser.consume(.rparen, error.ExpectedClosingParen);
                 return;
             }
@@ -99,6 +101,8 @@ pub const Parser = struct {
         self.prev = self.curr;
         if (self.scanner.next()) |n| {
             self.curr = n;
+        } else {
+            self.curr.tag = .eof;
         }
     }
 
@@ -157,7 +161,7 @@ test "simple expression" {
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
 }
 
-test "expression not ended" {
+test "no closing" {
     const code =
         \\(125
     ;
@@ -167,6 +171,16 @@ test "expression not ended" {
     try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk));
 }
 
+test "no opening" {
+    const code =
+        \\125)
+    ;
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    try testing.expectError(CompileErrors.ExpectedEOF, compiler.compile(code, &chunk));
+}
+
 test "empty expression" {
     const code =
         \\()
@@ -174,6 +188,13 @@ test "empty expression" {
     var chunk = Chunk{};
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk);
+    const code2 =
+        \\(() () (()))
+    ;
+
+    chunk = Chunk{};
+    compiler = Compiler{};
+    _ = try compiler.compile(code2, &chunk);
 }
 
 test "plus expression" {

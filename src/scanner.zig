@@ -32,6 +32,7 @@ pub const Tag = enum {
     sharp,
 
     unknown,
+    eof,
 };
 
 /// Token type
