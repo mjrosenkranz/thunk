@@ -9,6 +9,11 @@ pub const Chunk = struct {
     const MAX_INST = 1024;
     const MAX_IMMS = 1024;
 
+    pub const ChunkError = error{
+        TooManyImmediates,
+        TooManyInstructions,
+    };
+
     /// instructions that make up this chunk
     code: [MAX_INST]Inst = undefined,
     /// offset in the inst array

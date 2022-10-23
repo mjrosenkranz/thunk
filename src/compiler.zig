@@ -9,6 +9,14 @@ const Tag = scan.Tag;
 const Token = scan.Token;
 const Loc = scan.Loc;
 
+// TODO: use these
+const CompileErrors = error{
+    ExpectedExpression,
+    ExpectedClosingParen,
+    InvalidCharacter,
+    ChunkError,
+};
+
 /// Takes our source code and compiles it to bytecode for the vm
 pub const Compiler = struct {
     const Self = @This();
@@ -22,7 +30,6 @@ pub const Compiler = struct {
         self.parser = Parser.init(src);
         self.chunk = chunk;
 
-        self.parser.advance();
         try self.expression();
 
         // TODO: eof
@@ -31,13 +38,21 @@ pub const Compiler = struct {
         return false;
     }
 
-    pub fn expression(self: *Self) !void {
-        // basically only handle constants rn
-        try self.parser.consume(.number, error.ExpectedFloat);
-        // if it's consumed that means we can add an immediate constant
-        _ = try self.chunk.pushImm(try self.parser.float());
-
-        // return error.ExpectedExpression;
+    pub fn expression(self: *Self) anyerror!void {
+        switch (self.parser.curr.tag) {
+            .number => {
+                self.parser.advance();
+                _ = try self.chunk.pushImm(try self.parser.float());
+            },
+            .lparen => {
+                self.parser.advance();
+                try self.expression();
+                try self.parser.consume(.rparen, error.ExpectedClosingParen);
+            },
+            else => {
+                return error.ExpectedExpression;
+            },
+        }
     }
 };
 
@@ -77,10 +92,11 @@ pub const Parser = struct {
     pub fn float(
         self: *Self,
     ) !Value {
-        const f = try std.fmt.parseFloat(
-            f32,
-            self.scanner.buf[self.prev.loc.start..self.prev.loc.end],
-        );
+        const str = self.scanner.buf[self.prev.loc.start..self.prev.loc.end];
+        const f = std.fmt.parseFloat(f32, str) catch |err| {
+            std.debug.print("not float: {s}\n", .{str});
+            return err;
+        };
         return Value{ .float = f };
     }
 };
@@ -89,12 +105,12 @@ const eps = std.math.epsilon(f32);
 
 test "compile number literal" {
     const code =
-        \\125
+        \\125.02
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk);
-    try testing.expectApproxEqAbs(@as(f32, 125.0), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 125.02), chunk.imms[0].float, eps);
 }
 
 test "fail to parse number literal" {
@@ -104,5 +120,25 @@ test "fail to parse number literal" {
 
     var chunk = Chunk{};
     var compiler = Compiler{};
-    try testing.expectError(error.ExpectedFloat, compiler.compile(code, &chunk));
+    try testing.expectError(CompileErrors.ExpectedExpression, compiler.compile(code, &chunk));
+}
+
+test "simple expression" {
+    const code =
+        \\(125)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
+}
+
+test "expression not ended" {
+    const code =
+        \\(125
+    ;
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk));
 }
