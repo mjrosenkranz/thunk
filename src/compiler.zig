@@ -30,7 +30,7 @@ pub const Compiler = struct {
         self.parser = Parser.init(src);
         self.chunk = chunk;
 
-        try self.expression();
+        try self.expr();
 
         // TODO: eof
         // try self.parser.consume(.eof, error.ExpectedExpression);
@@ -38,20 +38,43 @@ pub const Compiler = struct {
         return false;
     }
 
-    pub fn expression(self: *Self) anyerror!void {
+    /// parses/compiles an expression
+    fn expr(self: *Self) anyerror!void {
         switch (self.parser.curr.tag) {
+            .symbol => {
+                // we have nothing to do for symbols rn
+                std.debug.print("compile-todo: symbol\n", .{});
+            },
             .number => {
-                self.parser.advance();
+                try self.parser.consume(.number, error.ExpectedNumber);
                 _ = try self.chunk.pushImm(try self.parser.float());
             },
             .lparen => {
                 self.parser.advance();
-                try self.expression();
-                try self.parser.consume(.rparen, error.ExpectedClosingParen);
+                try self.list();
             },
+            .plus => {
+                self.parser.advance();
+                std.debug.print("compile-todo: plus\n", .{});
+            },
+            // should only be here if theres a problem?
+            // .rparen => return,
             else => {
+                std.debug.print("unexpected symbol {}\n", .{self.parser.curr.tag});
                 return error.ExpectedExpression;
             },
+        }
+    }
+
+    /// parses/compiles a non quoted list ()
+    fn list(self: *Self) anyerror!void {
+        while (true) {
+            std.debug.print("current {}\n", .{self.parser.curr.tag});
+            if (self.parser.curr.tag == .rparen) {
+                try self.parser.consume(.rparen, error.ExpectedClosingParen);
+                return;
+            }
+            try self.expr();
         }
     }
 };
@@ -113,14 +136,15 @@ test "compile number literal" {
     try testing.expectApproxEqAbs(@as(f32, 125.02), chunk.imms[0].float, eps);
 }
 
-test "fail to parse number literal" {
+test "parse symbol" {
+    // TODO: currently, nothing is compiled with symbols
     const code =
         \\symbol
     ;
 
     var chunk = Chunk{};
     var compiler = Compiler{};
-    try testing.expectError(CompileErrors.ExpectedExpression, compiler.compile(code, &chunk));
+    _ = try compiler.compile(code, &chunk);
 }
 
 test "simple expression" {
@@ -141,4 +165,24 @@ test "expression not ended" {
     var chunk = Chunk{};
     var compiler = Compiler{};
     try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk));
+}
+
+test "empty expression" {
+    const code =
+        \\()
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+}
+
+test "plus expression" {
+    const code =
+        \\(+ 125 13)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 }
