@@ -53,6 +53,9 @@ pub const Compiler = struct {
         // TODO: eof
         try self.parser.consume(.eof, error.ExpectedEOF);
 
+        // add a return
+        _ = try chunk.pushInst(.{ .ret = .{} });
+
         return false;
     }
 
@@ -82,17 +85,22 @@ pub const Compiler = struct {
                 reg = try self.list();
             },
             .plus => {
+                // TODO: should be able to safely discard all registers here
+                // since this expression is immediate
                 self.parser.advance();
-                const r1 = try self.expr();
-                const r2 = try self.expr();
-                reg = try self.allocReg();
-                _ = try self.chunk.pushInst(Inst{
-                    .add = .{
-                        .r = reg,
-                        .r1 = r1,
-                        .r2 = r2,
-                    },
-                });
+                reg = try self.binop(.{ .add = .{} });
+            },
+            .minus => {
+                self.parser.advance();
+                reg = try self.binop(.{ .sub = .{} });
+            },
+            .asterisk => {
+                self.parser.advance();
+                reg = try self.binop(.{ .mul = .{} });
+            },
+            .slash => {
+                self.parser.advance();
+                reg = try self.binop(.{ .div = .{} });
             },
             .eof => {},
             else => {
@@ -101,6 +109,30 @@ pub const Compiler = struct {
             },
         }
 
+        return reg;
+    }
+
+    fn binop(self: *Self, op: Inst) anyerror!Reg {
+        var bop: Inst = op;
+
+        const r1 = try self.expr();
+        const r2 = try self.expr();
+        const reg = try self.allocReg();
+        try switch (bop) {
+            .add,
+            .sub,
+            .mul,
+            .div,
+            => |*i| {
+                i.* = .{
+                    .r = reg,
+                    .r1 = r1,
+                    .r2 = r2,
+                };
+            },
+            else => error.InvalidBinOpInst,
+        };
+        _ = try self.chunk.pushInst(bop);
         return reg;
     }
 
@@ -243,5 +275,60 @@ test "plus expression" {
         .{ .load = .{ .r = 1, .u = 0 } },
         .{ .load = .{ .r = 2, .u = 1 } },
         .{ .add = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "minus expression" {
+    const code =
+        \\(- 3 13)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .sub = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "mul expression" {
+    const code =
+        \\(* 3 13)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .mul = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "div expression" {
+    const code =
+        \\(/ 3 13)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .div = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
     }, chunk.code[0..chunk.n_inst]);
 }

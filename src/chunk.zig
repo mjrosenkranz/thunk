@@ -98,10 +98,10 @@ pub const Chunk = struct {
                 args.r2,
             }),
             .load => |args| {
-                std.debug.print(offset_fmt ++ "load: imm[{}] ({d:.1}) into reg{}\n", .{
+                std.debug.print(offset_fmt ++ "load: imm[{}] ({d:.2}) into reg{}\n", .{
                     offset,
                     args.u,
-                    self.imms[args.u],
+                    self.imms[args.u].float,
                     args.r,
                 });
             },

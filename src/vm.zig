@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const Chunk = @import("chunk.zig").Chunk;
+const Compiler = @import("compiler.zig").Compiler;
 const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
 /// virtual machine for interpreting our op-codes
@@ -298,4 +299,61 @@ test "divide" {
     try testing.expectApproxEqAbs(@as(f32, 6), vm.regs[b].float, eps);
     try testing.expectApproxEqAbs(@as(f32, -4), vm.regs[c].float, eps);
     try testing.expectApproxEqAbs(@as(f32, -1.5), vm.regs[d].float, eps);
+}
+
+test "addition full pipeline" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    const code =
+        \\(+ 125 13)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .add = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+
+    try vm.exec(&chunk);
+    try testing.expectApproxEqAbs(@as(f32, 125), vm.regs[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), vm.regs[2].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 138), vm.regs[3].float, eps);
+}
+
+test "nested math full pipeline" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    const code =
+        \\(* 3 (+ 4 5))
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 4), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 5), chunk.imms[2].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .load = .{ .r = 3, .u = 2 } },
+        .{ .add = .{ .r = 4, .r1 = 2, .r2 = 3 } },
+        .{ .mul = .{ .r = 5, .r1 = 1, .r2 = 4 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+
+    try vm.exec(&chunk);
+    try testing.expectApproxEqAbs(@as(f32, 3), vm.regs[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 4), vm.regs[2].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 5), vm.regs[3].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 9), vm.regs[4].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 27), vm.regs[5].float, eps);
 }

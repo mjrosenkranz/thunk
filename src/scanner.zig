@@ -17,8 +17,8 @@ pub const Tag = enum {
     // math symbols
     plus,
     minus,
-    times,
-    divide,
+    asterisk,
+    slash,
     modulus,
 
     period,
@@ -119,11 +119,11 @@ pub const Scanner = struct {
                                 tok.tag = .minus;
                             },
                             '*' => {
-                                tok.tag = .times;
+                                tok.tag = .asterisk;
                                 break;
                             },
                             '/' => {
-                                tok.tag = .divide;
+                                tok.tag = .slash;
                                 break;
                             },
                             '%' => {
@@ -418,8 +418,8 @@ test "numbers" {
         .number,
         .rparen,
         .minus,
-        .times,
-        .divide,
+        .asterisk,
+        .slash,
         .modulus,
         .period,
         .number,
