@@ -1,7 +1,9 @@
 const std = @import("std");
 const testing = std.testing;
 const Chunk = @import("chunk.zig").Chunk;
-const Inst = @import("inst.zig").Inst;
+const inst = @import("inst.zig");
+const Inst = inst.Inst;
+const Reg = inst.Reg;
 const Value = @import("value.zig").Value;
 const scan = @import("scanner.zig");
 const Scanner = scan.Scanner;
@@ -19,6 +21,8 @@ const CompileErrors = error{
     ExpectedClosingParen,
     ExpectedOpeningParen,
     InvalidCharacter,
+    // compiling
+    OutOfRegisters,
 };
 
 /// Takes our source code and compiles it to bytecode for the vm
@@ -30,11 +34,21 @@ pub const Compiler = struct {
     /// the chunk we are currently working on
     chunk: *Chunk = undefined,
 
+    /// register allocator
+    last_reg: Reg = 0,
+
+    fn allocReg(self: *Self) !Reg {
+        if (self.last_reg == 255) return CompileErrors.OutOfRegisters;
+
+        self.last_reg += 1;
+        return self.last_reg;
+    }
+
     pub fn compile(self: *Self, src: []const u8, chunk: *Chunk) !bool {
         self.parser = Parser.init(src);
         self.chunk = chunk;
 
-        try self.expr();
+        _ = try self.expr();
 
         // TODO: eof
         try self.parser.consume(.eof, error.ExpectedEOF);
@@ -43,7 +57,8 @@ pub const Compiler = struct {
     }
 
     /// parses/compiles an expression
-    fn expr(self: *Self) anyerror!void {
+    fn expr(self: *Self) anyerror!Reg {
+        var reg: Reg = 0;
         switch (self.parser.curr.tag) {
             .symbol => {
                 // we have nothing to do for symbols rn
@@ -51,32 +66,53 @@ pub const Compiler = struct {
             },
             .number => {
                 try self.parser.consume(.number, error.ExpectedNumber);
-                _ = try self.chunk.pushImm(try self.parser.float());
+                const idx = try self.chunk.pushImm(try self.parser.float());
+                // allocate registor for the number
+                reg = try self.allocReg();
+
+                _ = try self.chunk.pushInst(Inst{
+                    .load = .{
+                        .r = reg,
+                        .u = idx,
+                    },
+                });
             },
             .lparen => {
                 self.parser.advance();
-                try self.list();
+                reg = try self.list();
             },
             .plus => {
                 self.parser.advance();
-                std.debug.print("compile-todo: plus\n", .{});
+                const r1 = try self.expr();
+                const r2 = try self.expr();
+                reg = try self.allocReg();
+                _ = try self.chunk.pushInst(Inst{
+                    .add = .{
+                        .r = reg,
+                        .r1 = r1,
+                        .r2 = r2,
+                    },
+                });
             },
-            .eof => return,
+            .eof => {},
             else => {
                 std.debug.print("unexpected tag {}\n", .{self.parser.curr.tag});
                 return error.ExpectedExpression;
             },
         }
+
+        return reg;
     }
 
     /// parses/compiles a non quoted list ()
-    fn list(self: *Self) anyerror!void {
+    fn list(self: *Self) anyerror!Reg {
+        var last: Reg = 0;
         while (true) {
             if (self.parser.curr.tag == .rparen or self.parser.curr.tag == .eof) {
                 try self.parser.consume(.rparen, error.ExpectedClosingParen);
-                return;
+                return last;
             }
-            try self.expr();
+            last = try self.expr();
         }
     }
 };
@@ -202,4 +238,10 @@ test "plus expression" {
     _ = try compiler.compile(code, &chunk);
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .add = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+    }, chunk.code[0..chunk.n_inst]);
 }

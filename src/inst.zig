@@ -1,4 +1,8 @@
 const std = @import("std");
+
+/// Typesafe register arguments
+pub const Reg = u8;
+
 /// Instructions that are our bytecode
 /// all instructions are the same size (32 bits)
 /// to maintain alignment
@@ -16,20 +20,20 @@ pub const Inst = union(enum) {
 
     /// arguments for instruction with three arguments
     pub const Arg3 = packed struct {
-        r: u8 = 0,
-        r1: u8 = 0,
-        r2: u8 = 0,
+        r: Reg = 0,
+        r1: Reg = 0,
+        r2: Reg = 0,
     };
 
     /// arguments for instruction with one signed argument
     pub const ArgS = packed struct {
-        r: u8 = 0,
+        r: Reg = 0,
         s: i16 = 0,
     };
 
     /// arguments for instruction with an unsigned argument
     pub const ArgU = packed struct {
-        r: u8 = 0,
+        r: Reg = 0,
         u: u16 = 0,
     };
 
