@@ -10,6 +10,7 @@ const Scanner = scan.Scanner;
 const Tag = scan.Tag;
 const Token = scan.Token;
 const Loc = scan.Loc;
+const env = @import("env.zig");
 
 // TODO: use these
 const CompileErrors = error{

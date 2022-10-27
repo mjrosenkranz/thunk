@@ -31,6 +31,10 @@ pub const Tag = enum {
     backslash,
     sharp,
 
+    // keywords
+    t,
+    f,
+
     unknown,
     eof,
 };
@@ -53,6 +57,7 @@ pub const Scanner = struct {
         // a number
         maybe_number,
         period,
+        sharp,
     };
 
     /// where are we?
@@ -153,7 +158,7 @@ pub const Scanner = struct {
                             },
                             '#' => {
                                 tok.tag = .sharp;
-                                break;
+                                state = .sharp;
                             },
                             else => {
                                 tok.tag = .unknown;
@@ -163,6 +168,17 @@ pub const Scanner = struct {
                     }
 
                     // otherwise it must be a symbol character
+                },
+                .sharp => {
+                    // next character should be t for true and f for false
+                    if (c == 't') {
+                        tok.tag = .t;
+                    } else if (c == 'f') {
+                        tok.tag = .f;
+                    } else {
+                        tok.tag = .unknown;
+                    }
+                    break;
                 },
                 .number => {
                     if (!is_digit(c)) {
@@ -446,6 +462,23 @@ test "comment" {
         .number,
         .lparen,
         .symbol,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "literals" {
+    const code =
+        \\#t #f
+    ;
+
+    const expected_str = [_][]const u8{
+        "#t",
+        "#f",
+    };
+    const expected_tag = [_]Tag{
+        .t,
+        .f,
     };
 
     try testScanner(code, &expected_str, &expected_tag);
