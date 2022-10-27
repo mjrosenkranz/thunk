@@ -66,17 +66,17 @@ pub const Scanner = struct {
         };
     }
 
-    pub fn next(self: *Self) ?Token {
-        if (self.idx == self.buf.len)
-            return null;
-
+    pub fn next(self: *Self) Token {
         var tok = Token{
-            .tag = .unknown,
+            .tag = .eof,
             .loc = .{
                 .start = self.idx,
                 .end = 0,
             },
         };
+
+        if (self.idx == self.buf.len)
+            return tok;
 
         var state: State = .start;
         while (true) {
@@ -238,7 +238,9 @@ pub const Scanner = struct {
         self.idx += 1;
         tok.loc.end = self.idx;
 
-        if (state == .comment) return null;
+        if (state == .comment) {
+            tok.tag = .eof;
+        }
 
         return tok;
     }
@@ -314,6 +316,24 @@ test "init" {
     _ = scan;
 }
 
+pub fn testScanner(
+    src: []const u8,
+    strs: []const []const u8,
+    tags: []const Tag,
+) !void {
+    var scan = Scanner.init(src);
+    for (strs) |str, i| {
+        const t = scan.next();
+        try testing.expect(std.mem.eql(
+            u8,
+            scan.buf[t.loc.start..t.loc.end],
+            str,
+        ));
+        try testing.expect(t.tag == tags[i]);
+        _ = tags[i];
+    }
+}
+
 test "get next token" {
     const code =
         \\ (hello 123 world)
@@ -334,19 +354,7 @@ test "get next token" {
         .rparen,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    while (scan.next()) |t| {
-        try testing.expect(std.mem.eql(
-            u8,
-            scan.buf[t.loc.start..t.loc.end],
-            expected_str[i],
-        ));
-        try testing.expect(t.tag == expected_tag[i]);
-        _ = expected_tag[i];
-
-        i += 1;
-    }
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "valid symbol" {
@@ -373,19 +381,7 @@ test "valid symbol" {
         .symbol,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    while (scan.next()) |t| {
-        try testing.expect(std.mem.eql(
-            u8,
-            scan.buf[t.loc.start..t.loc.end],
-            expected_str[i],
-        ));
-        try testing.expect(t.tag == expected_tag[i]);
-        _ = expected_tag[i];
-
-        i += 1;
-    }
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "numbers" {
@@ -431,19 +427,7 @@ test "numbers" {
         .number,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    while (scan.next()) |t| {
-        try testing.expect(std.mem.eql(
-            u8,
-            scan.buf[t.loc.start..t.loc.end],
-            expected_str[i],
-        ));
-        try testing.expect(t.tag == expected_tag[i]);
-        _ = expected_tag[i];
-
-        i += 1;
-    }
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "comment" {
@@ -464,19 +448,7 @@ test "comment" {
         .symbol,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    while (scan.next()) |t| {
-        try testing.expect(std.mem.eql(
-            u8,
-            scan.buf[t.loc.start..t.loc.end],
-            expected_str[i],
-        ));
-        try testing.expect(t.tag == expected_tag[i]);
-        _ = expected_tag[i];
-
-        i += 1;
-    }
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "special characters" {
@@ -506,19 +478,7 @@ test "special characters" {
         .sharp,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    while (scan.next()) |t| {
-        try testing.expect(std.mem.eql(
-            u8,
-            scan.buf[t.loc.start..t.loc.end],
-            expected_str[i],
-        ));
-        try testing.expect(t.tag == expected_tag[i]);
-        _ = expected_tag[i];
-
-        i += 1;
-    }
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "just a number" {
@@ -535,7 +495,7 @@ test "just a number" {
 
     var scan = Scanner.init(code);
     var i: usize = 0;
-    const t = scan.next().?;
+    const t = scan.next();
     try testing.expect(t.tag == expected_tag[i]);
     try testing.expect(std.mem.eql(
         u8,
@@ -558,7 +518,7 @@ test "just a symbol" {
 
     var scan = Scanner.init(code);
     var i: usize = 0;
-    const t = scan.next().?;
+    const t = scan.next();
     try testing.expect(t.tag == expected_tag[i]);
     try testing.expect(std.mem.eql(
         u8,

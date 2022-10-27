@@ -99,11 +99,7 @@ pub const Parser = struct {
     /// gets us the next token in current and saves the previous
     pub fn advance(self: *Self) void {
         self.prev = self.curr;
-        if (self.scanner.next()) |n| {
-            self.curr = n;
-        } else {
-            self.curr.tag = .eof;
-        }
+        self.curr = self.scanner.next();
     }
 
     /// we expect the current token to have tag, if not we throw err
