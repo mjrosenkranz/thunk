@@ -32,8 +32,8 @@ pub const Tag = enum {
     sharp,
 
     // keywords
-    t,
-    f,
+    t, // true
+    f, // false
 
     unknown,
     eof,
