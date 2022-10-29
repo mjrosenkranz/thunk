@@ -31,9 +31,10 @@ pub const Tag = enum {
     backslash,
     sharp,
 
-    // keywords
+    // type keywords
     t, // true
     f, // false
+    nil,
 
     unknown,
     eof,
@@ -52,6 +53,7 @@ pub const Scanner = struct {
         start,
         number,
         symbol,
+        identifier,
         comment,
         // starts with a symbol that may be
         // a number
@@ -80,7 +82,7 @@ pub const Scanner = struct {
             },
         };
 
-        if (self.idx == self.buf.len)
+        if (self.idx >= self.buf.len)
             return tok;
 
         var state: State = .start;
@@ -96,8 +98,9 @@ pub const Scanner = struct {
                         state = .number;
                         tok.tag = .number;
                     } else if (is_alpha(c)) {
-                        state = .symbol;
-                        tok.tag = .symbol;
+                        state = .identifier;
+                        continue;
+                        // tok.tag = .symbol;
                     } else {
                         // otherwise it is a single character to handle
                         switch (c) {
@@ -190,10 +193,19 @@ pub const Scanner = struct {
                         }
                     }
                 },
-                .symbol => {
-                    if (!(is_symbol(c))) {
+                .identifier => {
+                    if (self.maybe_identifier()) |id_tag| {
+                        tok.tag = id_tag;
                         self.idx -= 1;
-                        tok.tag = .symbol;
+                        break;
+                    } else {
+                        state = .symbol;
+                    }
+                },
+                .symbol => {
+                    tok.tag = .symbol;
+                    if (!is_symbol(c)) {
+                        self.idx -= 1;
                         break;
                     }
                 },
@@ -259,6 +271,38 @@ pub const Scanner = struct {
         }
 
         return tok;
+    }
+
+    /// attempt to increasae index, returns false if cant
+    fn incIdx(self: *Self) bool {
+        self.idx += 1;
+        if (self.idx == self.buf.len)
+            return false;
+
+        return true;
+    }
+
+    /// figure out which identifier this is or just a symbol
+    inline fn maybe_identifier(self: *Self) ?Tag {
+        var c = self.buf[self.idx];
+        if (c == 'n' and self.incIdx()) {
+            c = self.buf[self.idx];
+            if (c == 'i' and self.incIdx()) {
+                c = self.buf[self.idx];
+                if (c == 'l') {
+                    if (self.incIdx()) {
+                        c = self.buf[self.idx];
+                        if (!is_symbol(c)) {
+                            return .nil;
+                        }
+                    } else {
+                        return .nil;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     inline fn is_whitespace(c: u8) bool {
@@ -340,13 +384,13 @@ pub fn testScanner(
     var scan = Scanner.init(src);
     for (strs) |str, i| {
         const t = scan.next();
+        std.debug.print("{}: {s}\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
         try testing.expect(std.mem.eql(
             u8,
             scan.buf[t.loc.start..t.loc.end],
             str,
         ));
         try testing.expect(t.tag == tags[i]);
-        _ = tags[i];
     }
 }
 
@@ -469,16 +513,18 @@ test "comment" {
 
 test "literals" {
     const code =
-        \\#t #f
+        \\#t #f nil
     ;
 
     const expected_str = [_][]const u8{
         "#t",
         "#f",
+        "nil",
     };
     const expected_tag = [_]Tag{
         .t,
         .f,
+        .nil,
     };
 
     try testScanner(code, &expected_str, &expected_tag);
@@ -526,15 +572,7 @@ test "just a number" {
         .number,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    const t = scan.next();
-    try testing.expect(t.tag == expected_tag[i]);
-    try testing.expect(std.mem.eql(
-        u8,
-        scan.buf[t.loc.start..t.loc.end],
-        expected_str[i],
-    ));
+    try testScanner(code, &expected_str, &expected_tag);
 }
 
 test "just a symbol" {
@@ -549,13 +587,5 @@ test "just a symbol" {
         .symbol,
     };
 
-    var scan = Scanner.init(code);
-    var i: usize = 0;
-    const t = scan.next();
-    try testing.expect(t.tag == expected_tag[i]);
-    try testing.expect(std.mem.eql(
-        u8,
-        scan.buf[t.loc.start..t.loc.end],
-        expected_str[i],
-    ));
+    try testScanner(code, &expected_str, &expected_tag);
 }
