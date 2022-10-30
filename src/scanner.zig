@@ -20,6 +20,10 @@ pub const Tag = enum {
     asterisk,
     slash,
     modulus,
+    gt,
+    lt,
+    gte,
+    lte,
 
     period,
 
@@ -35,6 +39,12 @@ pub const Tag = enum {
     t, // true
     f, // false
     nil,
+
+    // keywords
+    @"if",
+    define,
+    lambda,
+    let,
 
     unknown,
     eof,
@@ -60,6 +70,10 @@ pub const Scanner = struct {
         maybe_number,
         period,
         sharp,
+
+        // we may be in a gt or a gte
+        greater,
+        less,
     };
 
     /// where are we?
@@ -111,6 +125,14 @@ pub const Scanner = struct {
                             ')' => {
                                 tok.tag = .rparen;
                                 break;
+                            },
+                            '>' => {
+                                state = .greater;
+                                tok.tag = .gt;
+                            },
+                            '<' => {
+                                state = .less;
+                                tok.tag = .lt;
                             },
                             ';' => {
                                 state = .comment;
@@ -252,6 +274,34 @@ pub const Scanner = struct {
                         tok.tag = .symbol;
                     }
                 },
+                .greater => {
+                    if (is_delim(c)) {
+                        self.idx -= 1;
+                        tok.tag = .gt;
+                        break;
+                    } else if (c == '=') {
+                        tok.tag = .gte;
+                        break;
+                    } else {
+                        // otherwise its a symbol
+                        state = .symbol;
+                        tok.tag = .symbol;
+                    }
+                },
+                .less => {
+                    if (is_delim(c)) {
+                        self.idx -= 1;
+                        tok.tag = .lt;
+                        break;
+                    } else if (c == '=') {
+                        tok.tag = .lte;
+                        break;
+                    } else {
+                        // otherwise its a symbol
+                        state = .symbol;
+                        tok.tag = .symbol;
+                    }
+                },
             }
 
             // nothing left, return
@@ -298,6 +348,18 @@ pub const Scanner = struct {
                     } else {
                         return .nil;
                     }
+                }
+            }
+        } else if (c == 'i' and self.incIdx()) {
+            c = self.buf[self.idx];
+            if (c == 'f') {
+                if (self.incIdx()) {
+                    c = self.buf[self.idx];
+                    if (!is_symbol(c)) {
+                        return .@"if";
+                    }
+                } else {
+                    return .@"if";
                 }
             }
         }
@@ -585,6 +647,54 @@ test "just a symbol" {
     };
     const expected_tag = [_]Tag{
         .symbol,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "if expr" {
+    const code =
+        \\(if thn els)
+    ;
+
+    const expected_str = [_][]const u8{
+        "(",
+        "if",
+        "thn",
+        "els",
+        ")",
+    };
+    const expected_tag = [_]Tag{
+        .lparen,
+        .@"if",
+        .symbol,
+        .symbol,
+        .rparen,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "greater than and less than" {
+    const code =
+        \\> >= < <= <34> >
+    ;
+
+    const expected_str = [_][]const u8{
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "<34>",
+        ">",
+    };
+    const expected_tag = [_]Tag{
+        .gt,
+        .gte,
+        .lt,
+        .lte,
+        .symbol,
+        .gt,
     };
 
     try testScanner(code, &expected_str, &expected_tag);
