@@ -35,15 +35,23 @@ pub const Tag = enum {
     backslash,
     sharp,
 
-    // type keywords
-    t, // true
-    f, // false
-
     // keywords
-    @"if",
+    // derived expresions
+    @"false",
+    @"true",
+    @"and",
+    @"or",
+    begin,
+    case,
+    cond,
     define,
-    set,
+    do,
     lambda,
+    @"if",
+    let,
+    let_star,
+    letrec,
+    set,
 
     unknown,
     eof,
@@ -196,9 +204,9 @@ pub const Scanner = struct {
                 .sharp => {
                     // next character should be t for true and f for false
                     if (c == 't') {
-                        tok.tag = .t;
+                        tok.tag = .@"true";
                     } else if (c == 'f') {
-                        tok.tag = .f;
+                        tok.tag = .@"false";
                     } else {
                         tok.tag = .unknown;
                     }
@@ -323,29 +331,117 @@ pub const Scanner = struct {
     }
 
     /// attempt to increasae index, returns false if cant
-    fn incIdx(self: *Self) bool {
+    fn incIdx(self: *Self) ?u8 {
         self.idx += 1;
         if (self.idx == self.buf.len)
-            return false;
+            return null;
 
+        return self.buf[self.idx];
+    }
+
+    /// attempt to compare if the buffer contains the rest of this value
+    pub fn compareId(self: *Self, id: []const u8) bool {
+        // cant fit in the rest of the buffer so cant match
+        if (self.idx + id.len > self.buf.len) return false;
+        for (id) |item, index| {
+            if (self.buf[self.idx + index] != item) return false;
+        }
+
+        // if successful we increase the idx
+        self.idx += id.len;
         return true;
     }
 
     /// figure out which identifier this is or just a symbol
     inline fn maybe_identifier(self: *Self) ?Tag {
-        var c = self.buf[self.idx];
-        if (c == 'i' and self.incIdx()) {
-            c = self.buf[self.idx];
-            if (c == 'f') {
-                if (self.incIdx()) {
-                    c = self.buf[self.idx];
-                    if (!is_symbol(c)) {
-                        return .@"if";
+        switch (self.buf[self.idx]) {
+            'a' => {
+                if (self.compareId("and")) {
+                    return .@"and";
+                }
+            },
+            'b' => {
+                if (self.compareId("begin")) {
+                    return .begin;
+                }
+            },
+            'c' => {
+                if (self.incIdx()) |c| {
+                    switch (c) {
+                        'o' => {
+                            if (self.compareId("ond")) {
+                                return .cond;
+                            }
+                        },
+                        'a' => {
+                            if (self.compareId("ase")) {
+                                return .case;
+                            }
+                        },
+                        else => {},
                     }
-                } else {
+                }
+            },
+            'i' => {
+                if (self.compareId("if")) {
                     return .@"if";
                 }
-            }
+            },
+
+            'd' => {
+                if (self.incIdx()) |c| {
+                    switch (c) {
+                        'o' => {
+                            self.idx += 1;
+                            return .do;
+                        },
+                        'e' => {
+                            if (self.compareId("efine")) {
+                                return .define;
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            },
+            'l' => {
+                if (self.incIdx()) |c| {
+                    switch (c) {
+                        'a' => {
+                            if (self.compareId("ambda")) {
+                                return .lambda;
+                            }
+                        },
+                        'e' => {
+                            if (self.compareId("et")) {
+                                const cc = self.buf[self.idx];
+                                if (is_symbol(cc)) {
+                                    if (self.compareId("*")) {
+                                        return .let_star;
+                                    }
+                                    if (self.compareId("rec")) {
+                                        return .letrec;
+                                    }
+                                } else {
+                                    return .let;
+                                }
+                            }
+                        },
+                        else => {},
+                    }
+                }
+            },
+            'o' => {
+                if (self.compareId("or")) {
+                    return .@"or";
+                }
+            },
+            's' => {
+                if (self.compareId("set!")) {
+                    return .set;
+                }
+            },
+            else => {},
         }
 
         return null;
@@ -430,7 +526,7 @@ pub fn testScanner(
     var scan = Scanner.init(src);
     for (strs) |str, i| {
         const t = scan.next();
-        std.debug.print("{}: {s}\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
+        std.debug.print("{}: '{s}'\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
         try testing.expect(std.mem.eql(
             u8,
             scan.buf[t.loc.start..t.loc.end],
@@ -567,8 +663,8 @@ test "literals" {
         "#f",
     };
     const expected_tag = [_]Tag{
-        .t,
-        .f,
+        .@"true",
+        .@"false",
     };
 
     try testScanner(code, &expected_str, &expected_tag);
@@ -652,6 +748,70 @@ test "if expr" {
         .symbol,
         .symbol,
         .rparen,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "identifiers" {
+    const code =
+        \\and
+        \\begin
+        \\case
+        \\cond
+        \\define
+        \\do
+        \\if
+        \\lambda
+        \\let
+        \\let*
+        \\letrec
+        \\or
+        \\set!
+    ;
+
+    const expected_str = [_][]const u8{
+        \\and
+        ,
+        \\begin
+        ,
+        \\case
+        ,
+        \\cond
+        ,
+        \\define
+        ,
+        \\do
+        ,
+        \\if
+        ,
+        \\lambda
+        ,
+        \\let
+        ,
+        \\let*
+        ,
+        \\letrec
+        ,
+        \\or
+        ,
+        \\set!
+        ,
+    };
+    const expected_tag = [_]Tag{
+        .@"and",
+        .begin,
+        .case,
+        .cond,
+        .define,
+        .do,
+        .@"if",
+        .lambda,
+        .let,
+        .let_star,
+        .letrec,
+        .@"or",
+        .set,
     };
 
     try testScanner(code, &expected_str, &expected_tag);

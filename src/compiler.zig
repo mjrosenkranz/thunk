@@ -70,8 +70,8 @@ pub const Compiler = struct {
                 // we have nothing to do for symbols rn
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
             },
-            .t => {
-                try self.parser.consume(.t, error.ExpectedTrue);
+            .@"true" => {
+                try self.parser.consume(.@"true", error.ExpectedTrue);
                 const idx = try self.chunk.pushImm(.{ .boolean = true });
                 // allocate registor for the number
                 reg = try self.allocReg();
@@ -83,8 +83,8 @@ pub const Compiler = struct {
                     },
                 });
             },
-            .f => {
-                try self.parser.consume(.f, error.ExpectedFalse);
+            .@"false" => {
+                try self.parser.consume(.@"false", error.ExpectedFalse);
                 const idx = try self.chunk.pushImm(.{ .boolean = false });
                 // allocate registor for the number
                 reg = try self.allocReg();
