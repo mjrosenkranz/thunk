@@ -38,13 +38,12 @@ pub const Tag = enum {
     // type keywords
     t, // true
     f, // false
-    nil,
 
     // keywords
     @"if",
     define,
+    set,
     lambda,
-    let,
 
     unknown,
     eof,
@@ -335,22 +334,7 @@ pub const Scanner = struct {
     /// figure out which identifier this is or just a symbol
     inline fn maybe_identifier(self: *Self) ?Tag {
         var c = self.buf[self.idx];
-        if (c == 'n' and self.incIdx()) {
-            c = self.buf[self.idx];
-            if (c == 'i' and self.incIdx()) {
-                c = self.buf[self.idx];
-                if (c == 'l') {
-                    if (self.incIdx()) {
-                        c = self.buf[self.idx];
-                        if (!is_symbol(c)) {
-                            return .nil;
-                        }
-                    } else {
-                        return .nil;
-                    }
-                }
-            }
-        } else if (c == 'i' and self.incIdx()) {
+        if (c == 'i' and self.incIdx()) {
             c = self.buf[self.idx];
             if (c == 'f') {
                 if (self.incIdx()) {
@@ -575,18 +559,16 @@ test "comment" {
 
 test "literals" {
     const code =
-        \\#t #f nil
+        \\#t #f '()
     ;
 
     const expected_str = [_][]const u8{
         "#t",
         "#f",
-        "nil",
     };
     const expected_tag = [_]Tag{
         .t,
         .f,
-        .nil,
     };
 
     try testScanner(code, &expected_str, &expected_tag);

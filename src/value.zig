@@ -2,17 +2,28 @@ const std = @import("std");
 
 pub const ValueType = enum {
     float,
-    nil,
+    empty,
     boolean,
+    pair,
+    string,
+};
+
+pub const Pair = struct {
+    car: Value,
+    cdr: Value,
 };
 
 pub const Value = union(ValueType) {
     /// float/number type
     float: f32,
     /// nothing, nada, void, null
-    nil: void,
+    empty: void,
     /// this value is true or false
     boolean: bool,
+    /// stores a pointer to a pair on the heap
+    pair: *Pair,
+    /// string
+    string: []const u8,
 
     pub inline fn sameType(a: Value, b: Value) bool {
         return std.meta.activeTag(a) == std.meta.activeTag(b);

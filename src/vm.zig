@@ -357,3 +357,17 @@ test "nested math full pipeline" {
     try testing.expectApproxEqAbs(@as(f32, 9), vm.regs[4].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 27), vm.regs[5].float, eps);
 }
+
+// TODO: redefined builtin primitives so this passes
+test "just a proceedure" {
+    var vm = Vm.initConfig(TestConfig);
+    defer vm.deinit();
+
+    const code =
+        \\+
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try vm.exec(&chunk);
+}

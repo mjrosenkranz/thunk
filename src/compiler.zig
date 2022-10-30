@@ -96,19 +96,6 @@ pub const Compiler = struct {
                     },
                 });
             },
-            .nil => {
-                try self.parser.consume(.nil, error.ExpectedFalse);
-                const idx = try self.chunk.pushImm(Value.nil);
-                // allocate registor for the number
-                reg = try self.allocReg();
-
-                _ = try self.chunk.pushInst(Inst{
-                    .load = .{
-                        .r = reg,
-                        .u = idx,
-                    },
-                });
-            },
             .number => {
                 try self.parser.consume(.number, error.ExpectedNumber);
                 const idx = try self.chunk.pushImm(try self.parser.float());
@@ -386,21 +373,6 @@ test "bool expression" {
         .{ .load = .{ .r = 1, .u = 0 } },
         .{ .load = .{ .r = 2, .u = 1 } },
         .{ .div = .{ .r = 3, .r1 = 1, .r2 = 2 } },
-        .{ .ret = .{} },
-    }, chunk.code[0..chunk.n_inst]);
-}
-
-test "nil expression" {
-    const code =
-        \\nil
-    ;
-    var chunk = Chunk{};
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
-    try testing.expect(chunk.imms[0].nil == {});
-
-    try testing.expectEqualSlices(Inst, &.{
-        .{ .load = .{ .r = 1, .u = 0 } },
         .{ .ret = .{} },
     }, chunk.code[0..chunk.n_inst]);
 }
