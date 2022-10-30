@@ -51,13 +51,14 @@ pub const Value = union(ValueType) {
     pub inline fn div(a: Value, b: Value) !Value {
         try assertType(.float, a);
         try assertType(.float, b);
-        Value{ .float = a.float / b.float };
+        return Value{ .float = a.float / b.float };
     }
 
     pub inline fn eql(a: Value, b: Value) !Value {
         return Value{
             .boolean = switch (a) {
                 .float => a.float == b.float,
+                .boolean => a.bool == b.bool,
                 else => return error.InvalidType,
             },
         };

@@ -68,6 +68,45 @@ pub const Compiler = struct {
                 // we have nothing to do for symbols rn
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
             },
+            .t => {
+                try self.parser.consume(.t, error.ExpectedTrue);
+                const idx = try self.chunk.pushImm(.{ .boolean = true });
+                // allocate registor for the number
+                reg = try self.allocReg();
+
+                _ = try self.chunk.pushInst(Inst{
+                    .load = .{
+                        .r = reg,
+                        .u = idx,
+                    },
+                });
+            },
+            .f => {
+                try self.parser.consume(.f, error.ExpectedFalse);
+                const idx = try self.chunk.pushImm(.{ .boolean = false });
+                // allocate registor for the number
+                reg = try self.allocReg();
+
+                _ = try self.chunk.pushInst(Inst{
+                    .load = .{
+                        .r = reg,
+                        .u = idx,
+                    },
+                });
+            },
+            .nil => {
+                try self.parser.consume(.nil, error.ExpectedFalse);
+                const idx = try self.chunk.pushImm(Value.nil);
+                // allocate registor for the number
+                reg = try self.allocReg();
+
+                _ = try self.chunk.pushInst(Inst{
+                    .load = .{
+                        .r = reg,
+                        .u = idx,
+                    },
+                });
+            },
             .number => {
                 try self.parser.consume(.number, error.ExpectedNumber);
                 const idx = try self.chunk.pushImm(try self.parser.float());
@@ -330,6 +369,39 @@ test "div expression" {
         .{ .load = .{ .r = 1, .u = 0 } },
         .{ .load = .{ .r = 2, .u = 1 } },
         .{ .div = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "bool expression" {
+    const code =
+        \\(/ #f #t)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expect(false == chunk.imms[0].boolean);
+    try testing.expect(true == chunk.imms[1].boolean);
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .load = .{ .r = 2, .u = 1 } },
+        .{ .div = .{ .r = 3, .r1 = 1, .r2 = 2 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "nil expression" {
+    const code =
+        \\nil
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk);
+    try testing.expect(chunk.imms[0].nil == {});
+
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
         .{ .ret = .{} },
     }, chunk.code[0..chunk.n_inst]);
 }
