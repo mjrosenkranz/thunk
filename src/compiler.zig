@@ -24,6 +24,8 @@ const CompileErrors = error{
     InvalidCharacter,
     // compiling
     OutOfRegisters,
+    // language
+    ExpectedSubexpression,
 };
 
 /// Takes our source code and compiles it to bytecode for the vm
@@ -182,6 +184,10 @@ pub const Compiler = struct {
         while (true) {
             if (self.parser.curr.tag == .rparen or self.parser.curr.tag == .eof) {
                 try self.parser.consume(.rparen, error.ExpectedClosingParen);
+                // if the next value is a right paren then this is invalid
+                if (last == 0) {
+                    return CompileErrors.ExpectedSubexpression;
+                }
                 return last;
             }
             last = try self.expr();
@@ -291,14 +297,7 @@ test "empty expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
-    const code2 =
-        \\(() () (()))
-    ;
-
-    chunk = Chunk{};
-    compiler = Compiler{};
-    _ = try compiler.compile(code2, &chunk);
+    try testing.expectError(CompileErrors.ExpectedSubexpression, compiler.compile(code, &chunk));
 }
 
 test "plus expression" {
