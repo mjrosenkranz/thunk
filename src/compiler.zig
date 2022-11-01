@@ -10,7 +10,7 @@ const Scanner = scan.Scanner;
 const Tag = scan.Tag;
 const Token = scan.Token;
 const Loc = scan.Loc;
-const env = @import("env.zig");
+const Env = @import("env.zig").Env;
 
 // TODO: use these
 const CompileErrors = error{
@@ -39,6 +39,9 @@ pub const Compiler = struct {
 
     /// register allocator
     last_reg: Reg = 0,
+
+    /// global environment
+    global_env: *Env = undefined,
 
     fn allocReg(self: *Self) !Reg {
         if (self.last_reg == 255) return CompileErrors.OutOfRegisters;
@@ -122,6 +125,23 @@ pub const Compiler = struct {
             .minus => {
                 self.parser.advance();
                 reg = try self.binop(.{ .sub = .{} });
+            },
+            // TODO: technically not an expr, statement??
+            .define => {
+                self.parser.advance();
+                // TODO: lambda def list
+                // next must be symbol
+                std.debug.print("{}\n", .{self.parser.curr.tag});
+                try self.parser.consume(.symbol, error.ExpectedSymbol);
+                // record symbol in imm
+                const idx = try self.chunk.pushImm(.{ .string = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end] });
+                // get reg from following expr
+                _ = try self.chunk.pushInst(Inst{
+                    .define_global = .{
+                        .r = try self.expr(),
+                        .u = idx,
+                    },
+                });
             },
             .asterisk => {
                 self.parser.advance();
@@ -375,4 +395,25 @@ test "bool expression" {
         .{ .div = .{ .r = 3, .r1 = 1, .r2 = 2 } },
         .{ .ret = .{} },
     }, chunk.code[0..chunk.n_inst]);
+}
+
+test "define var" {
+    const code =
+        \\(define foo 13)
+    ;
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk);
+    try testing.expectEqual(chunk.imms[0].string, "foo");
+    try testing.expect(chunk.imms[1].float == 13);
+    try testing.expectEqualSlices(Inst, &.{
+        .{ .load = .{ .r = 1, .u = 0 } },
+        .{ .define_global = .{ .u = 1, .r = 1 } },
+        .{ .ret = .{} },
+    }, chunk.code[0..chunk.n_inst]);
+
+    try testing.expect(env.map.get("foo") != null);
 }

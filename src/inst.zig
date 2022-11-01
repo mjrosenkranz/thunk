@@ -63,4 +63,7 @@ pub const Inst = union(enum) {
     div: Arg3,
     /// divides the immediate in s to a register and stores it in there
     divimm: ArgU,
+
+    /// define a global variable where the symbol name is in u and value in r
+    define_global: ArgU,
 };

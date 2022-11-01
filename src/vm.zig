@@ -4,6 +4,7 @@ const Chunk = @import("chunk.zig").Chunk;
 const Compiler = @import("compiler.zig").Compiler;
 const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
+const Env = @import("env.zig").Env;
 /// virtual machine for interpreting our op-codes
 pub const Vm = struct {
     const Self = @This();
@@ -22,6 +23,9 @@ pub const Vm = struct {
     /// registers used in the vm
     /// TODO: should this just be a u32? or maybe a union
     regs: [MAX_REGS]Value = undefined,
+
+    /// the global environment
+    // global: Env,
 
     pub fn init() Self {
         return .{};

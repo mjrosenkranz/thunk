@@ -5,6 +5,19 @@
 const std = @import("std");
 const Value = @import("value.zig").Value;
 
-pub const Env = std.hash_map.StringHashMap(Value);
+// TODO: replace with a hash table type
+pub const Env = struct {
+    const Self = @This();
 
-pub var global = Env.init(std.testing.allocator);
+    map: std.hash_map.StringHashMap(Value),
+
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return .{
+            .map = std.hash_map.StringHashMap(Value).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.map.deinit();
+    }
+};
