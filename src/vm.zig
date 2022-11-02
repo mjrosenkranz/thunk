@@ -25,15 +25,22 @@ pub const Vm = struct {
     regs: [MAX_REGS]Value = undefined,
 
     /// the global environment
-    // global: Env,
+    env: Env,
 
-    pub fn init() Self {
-        return .{};
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return .{
+            .env = Env.init(allocator),
+        };
     }
 
-    pub fn initConfig(config: Config) Self {
+    pub fn deinit(self: *Self) void {
+        self.env.deinit();
+    }
+
+    pub fn initConfig(config: Config, allocator: std.mem.Allocator) Self {
         return .{
             .config = config,
+            .env = Env.init(allocator),
         };
     }
 
@@ -76,6 +83,11 @@ pub const Vm = struct {
                 .divimm => |args| {
                     self.regs[args.r] = try self.regs[args.r].div(chunk.imms[args.u]);
                 },
+                .define_global => |args| {
+                    const imm = chunk.imms[args.u];
+                    try Value.assertType(.string, imm);
+                    try self.env.map.put(imm.string, self.regs[args.r]);
+                },
             }
 
             self.ip += 1;
@@ -88,10 +100,6 @@ pub const Vm = struct {
         // is there a case where a chunk should just end?
         return error.UnexpectedEnd;
     }
-
-    pub fn deinit(self: Self) void {
-        _ = self;
-    }
 };
 
 const TestConfig = Vm.Config{
@@ -101,12 +109,12 @@ const TestConfig = Vm.Config{
 const eps = std.math.epsilon(f32);
 
 test "init vm" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 }
 
 test "just returns" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     var chunk = try Chunk.fromSlice(&.{
@@ -117,7 +125,7 @@ test "just returns" {
 }
 
 test "UnexpectedEnd" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     var chunk = try Chunk.fromSlice(&.{
@@ -128,7 +136,7 @@ test "UnexpectedEnd" {
 }
 
 test "load a value" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     var chunk = Chunk{};
@@ -143,7 +151,7 @@ test "load a value" {
 }
 
 test "load some values and add them" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -169,7 +177,7 @@ test "load some values and add them" {
 }
 
 test "add and store in same register" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -193,7 +201,7 @@ test "add and store in same register" {
 }
 
 test "add immediate" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -213,7 +221,7 @@ test "add immediate" {
 }
 
 test "subtract" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -244,7 +252,7 @@ test "subtract" {
 }
 
 test "multiply" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -275,7 +283,7 @@ test "multiply" {
 }
 
 test "divide" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     // the registers we are loading into
@@ -306,7 +314,7 @@ test "divide" {
 }
 
 test "addition full pipeline" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     const code =
@@ -314,7 +322,7 @@ test "addition full pipeline" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    _ = try compiler.compile(code, &chunk, &vm.env);
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 
@@ -332,7 +340,7 @@ test "addition full pipeline" {
 }
 
 test "nested math full pipeline" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     const code =
@@ -340,7 +348,7 @@ test "nested math full pipeline" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    _ = try compiler.compile(code, &chunk, &vm.env);
     try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 4), chunk.imms[1].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 5), chunk.imms[2].float, eps);
@@ -364,7 +372,7 @@ test "nested math full pipeline" {
 
 // TODO: redefined builtin primitives so this passes
 test "just a proceedure" {
-    var vm = Vm.initConfig(TestConfig);
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
     const code =
@@ -372,6 +380,22 @@ test "just a proceedure" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    _ = try compiler.compile(code, &chunk, &vm.env);
     try vm.exec(&chunk);
+}
+
+test "define var" {
+    const code =
+        \\(define foo 13)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk, &vm.env);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.env.map.get("foo").?.float == 13);
 }

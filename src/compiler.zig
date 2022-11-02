@@ -50,9 +50,15 @@ pub const Compiler = struct {
         return self.last_reg;
     }
 
-    pub fn compile(self: *Self, src: []const u8, chunk: *Chunk) !bool {
+    pub fn compile(
+        self: *Self,
+        src: []const u8,
+        chunk: *Chunk,
+        env: *Env,
+    ) !bool {
         self.parser = Parser.init(src);
         self.chunk = chunk;
+        self.global_env = env;
 
         _ = try self.expr();
 
@@ -131,17 +137,27 @@ pub const Compiler = struct {
                 self.parser.advance();
                 // TODO: lambda def list
                 // next must be symbol
-                std.debug.print("{}\n", .{self.parser.curr.tag});
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
                 // record symbol in imm
-                const idx = try self.chunk.pushImm(.{ .string = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end] });
+
+                // TODO: this should be copied in by an allocator since the src lifetime will
+                // end some point after compilation
+                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+
+                const str_idx = try self.chunk.pushImm(.{ .string = str });
                 // get reg from following expr
                 _ = try self.chunk.pushInst(Inst{
                     .define_global = .{
                         .r = try self.expr(),
-                        .u = idx,
+                        .u = str_idx,
                     },
                 });
+
+                // create a slot in the global env for the variable
+                var res = try self.global_env.map.getOrPut(str);
+                if (!res.found_existing) {
+                    res.value_ptr.* = Value.empty;
+                }
             },
             .asterisk => {
                 self.parser.advance();
@@ -187,14 +203,14 @@ pub const Compiler = struct {
 
     /// parses/compiles a non quoted list ()
     fn list(self: *Self) anyerror!Reg {
+        // if the next value is a right paren then this is invalid
+        if (self.parser.curr.tag == .rparen) {
+            return CompileErrors.ExpectedSubexpression;
+        }
         var last: Reg = 0;
         while (true) {
             if (self.parser.curr.tag == .rparen or self.parser.curr.tag == .eof) {
                 try self.parser.consume(.rparen, error.ExpectedClosingParen);
-                // if the next value is a right paren then this is invalid
-                if (last == 0) {
-                    return CompileErrors.ExpectedSubexpression;
-                }
                 return last;
             }
             last = try self.expr();
@@ -253,7 +269,9 @@ test "compile number literal" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 125.02), chunk.imms[0].float, eps);
 }
 
@@ -265,7 +283,9 @@ test "parse symbol" {
 
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
 }
 
 test "simple expression" {
@@ -274,7 +294,9 @@ test "simple expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
 }
 
@@ -285,7 +307,9 @@ test "no closing" {
 
     var chunk = Chunk{};
     var compiler = Compiler{};
-    try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk));
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk, &env));
 }
 
 test "no opening" {
@@ -295,7 +319,9 @@ test "no opening" {
 
     var chunk = Chunk{};
     var compiler = Compiler{};
-    try testing.expectError(CompileErrors.ExpectedEOF, compiler.compile(code, &chunk));
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileErrors.ExpectedEOF, compiler.compile(code, &chunk, &env));
 }
 
 test "empty expression" {
@@ -304,7 +330,9 @@ test "empty expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    try testing.expectError(CompileErrors.ExpectedSubexpression, compiler.compile(code, &chunk));
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileErrors.ExpectedSubexpression, compiler.compile(code, &chunk, &env));
 }
 
 test "plus expression" {
@@ -313,7 +341,9 @@ test "plus expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 
@@ -331,7 +361,9 @@ test "minus expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 
@@ -349,7 +381,9 @@ test "mul expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 
@@ -367,7 +401,9 @@ test "div expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
 
@@ -385,7 +421,9 @@ test "bool expression" {
     ;
     var chunk = Chunk{};
     var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
     try testing.expect(false == chunk.imms[0].boolean);
     try testing.expect(true == chunk.imms[1].boolean);
 
@@ -406,12 +444,12 @@ test "define var" {
     var compiler = Compiler{};
     var env = Env.init(testing.allocator);
     defer env.deinit();
-    _ = try compiler.compile(code, &chunk);
-    try testing.expectEqual(chunk.imms[0].string, "foo");
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expectEqualSlices(u8, chunk.imms[0].string, "foo");
     try testing.expect(chunk.imms[1].float == 13);
     try testing.expectEqualSlices(Inst, &.{
-        .{ .load = .{ .r = 1, .u = 0 } },
-        .{ .define_global = .{ .u = 1, .r = 1 } },
+        .{ .load = .{ .r = 1, .u = 1 } },
+        .{ .define_global = .{ .u = 0, .r = 1 } },
         .{ .ret = .{} },
     }, chunk.code[0..chunk.n_inst]);
 

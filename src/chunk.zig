@@ -174,6 +174,13 @@ pub const Chunk = struct {
                     self.imms[args.u],
                 });
             },
+            .define_global => |args| {
+                std.debug.print(offset_fmt ++ "define: <global {s}> = reg[{}]\n", .{
+                    offset,
+                    self.imms[args.u].string,
+                    args.r,
+                });
+            },
         }
     }
 };
