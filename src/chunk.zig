@@ -90,7 +90,7 @@ pub const Chunk = struct {
 
     pub inline fn disassembleInst(self: Self, offset: usize, inst: Inst) void {
         const offset_fmt = "{d:0>4}: ";
-        switch (inst) {
+        switch (inst.op) {
             .ret => |args| std.debug.print(offset_fmt ++ "ret: a: {} b: {} c: {}\n", .{
                 offset,
                 args.r,
@@ -119,7 +119,7 @@ pub const Chunk = struct {
                     args.r,
                     args.r,
                     args.u,
-                    self.imms[args.u],
+                    self.imms[args.u].float,
                 });
             },
             .sub => |args| {
@@ -136,7 +136,7 @@ pub const Chunk = struct {
                     args.r,
                     args.r,
                     args.u,
-                    self.imms[args.u],
+                    self.imms[args.u].float,
                 });
             },
             .mul => |args| {
@@ -153,7 +153,7 @@ pub const Chunk = struct {
                     args.r,
                     args.r,
                     args.u,
-                    self.imms[args.u],
+                    self.imms[args.u].float,
                 });
             },
 
@@ -171,7 +171,7 @@ pub const Chunk = struct {
                     args.r,
                     args.r,
                     args.u,
-                    self.imms[args.u],
+                    self.imms[args.u].float,
                 });
             },
             .define_global => |args| {
@@ -187,10 +187,10 @@ pub const Chunk = struct {
 
 test "chunk" {
     var chunk = Chunk{};
-    _ = try chunk.pushInst(.{ .ret = .{} });
+    _ = try chunk.pushInst(Inst.init(.ret, .{}));
     const off = try chunk.pushInstSlice(&.{
-        .{ .load = .{ .u = 0 } },
-        .{ .ret = .{} },
+        Inst.init(.load, .{ .u = 0 }),
+        Inst.init(.ret, .{}),
     });
     try std.testing.expect(chunk.n_inst == 3);
     try std.testing.expect(chunk.n_inst == off);
@@ -198,8 +198,10 @@ test "chunk" {
     _ = try chunk.pushImm(.{ .float = 23.3 });
 
     std.debug.print("\n", .{});
-    chunk.disassemble();
+    // chunk.disassemble();
 
     chunk.clear();
     try std.testing.expect(chunk.n_inst == 0);
+
+    _ = Inst.init(.load, .{}).args().u;
 }
