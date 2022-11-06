@@ -1,6 +1,7 @@
 const std = @import("std");
 const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
+const String = @import("value.zig").String;
 
 /// A collection of instructions and acompanying data
 pub const Chunk = struct {
@@ -22,6 +23,19 @@ pub const Chunk = struct {
     imms: [MAX_IMMS]Value = undefined,
     /// offset in the imms array
     n_imms: usize = 0,
+
+    // TOOD: remove
+    allocator: std.mem.Allocator = undefined,
+
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return .{
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        _ = self;
+    }
 
     pub fn clear(self: *Self) void {
         self.* = Self{};
@@ -68,6 +82,18 @@ pub const Chunk = struct {
         self.imms[offset] = imm;
 
         return @intCast(u16, offset);
+    }
+
+    pub fn pushImmStr(self: *Self, str: []const u8) !u16 {
+        // check if we can even create the string
+        if (self.n_imms >= MAX_IMMS) {
+            return error.TooManyImmediates;
+        }
+        // allocate it
+        var ptr = try self.allocator.alignedAlloc(u8, @alignOf(String), @sizeOf(String) + str.len + 1);
+
+        // push it
+        return try self.pushImm(.{ .string = @ptrToInt(@ptrCast(*String, ptr)) });
     }
 
     pub fn fromSlice(insts: []const Inst) !Self {

@@ -6,6 +6,7 @@ const Inst = inst.Inst;
 const Arg3 = inst.Arg3;
 const Reg = inst.Reg;
 const Value = @import("value.zig").Value;
+const String = @import("value.zig").String;
 const scan = @import("scanner.zig");
 const Scanner = scan.Scanner;
 const Tag = scan.Tag;
@@ -148,8 +149,7 @@ pub const Compiler = struct {
                 // end some point after compilation
                 const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
 
-                // TODO: const str_idx = try self.chunk.pushImm(.{ .string = str });
-                const str_idx = 0;
+                const str_idx = try self.chunk.pushImmStr(str);
                 // get reg from following expr
                 _ = try self.chunk.pushInst(Inst.init(
                     .define_global,
@@ -442,23 +442,24 @@ test "bool expression" {
     }, chunk.code[0..chunk.n_inst]);
 }
 
-//test "define var" {
-//    const code =
-//        \\(define foo 13)
-//    ;
-//
-//    var chunk = Chunk{};
-//    var compiler = Compiler{};
-//    var env = Env.init(testing.allocator);
-//    defer env.deinit();
-//    _ = try compiler.compile(code, &chunk, &env);
-//    try testing.expectEqualSlices(u8, chunk.imms[0].string, "foo");
-//    try testing.expect(chunk.imms[1].float == 13);
-//    try testing.expectEqualSlices(Inst, &.{
-//        Inst.init(.load, .{ .r = 1, .u = 1 }),
-//        Inst.init(.define_global, .{ .u = 0, .r = 1 }),
-//        Inst.init(.ret, .{}),
-//    }, chunk.code[0..chunk.n_inst]);
-//
-//    try testing.expect(env.map.get("foo") != null);
-//}
+test "define var" {
+    const code =
+        \\(define foo 13)
+    ;
+
+    var chunk = Chunk.init(testing.allocator);
+    defer chunk.deinit();
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    // try testing.expectEqualSlices(u8, @intToPtr(*String, chunk.imms[0].string).bytes, "foo");
+    try testing.expect(chunk.imms[1].float == 13);
+    try testing.expectEqualSlices(Inst, &.{
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        Inst.init(.define_global, .{ .u = 0, .r = 1 }),
+        Inst.init(.ret, .{}),
+    }, chunk.code[0..chunk.n_inst]);
+
+    try testing.expect(env.map.get("foo") != null);
+}
