@@ -46,11 +46,6 @@ pub const ArgU = packed struct(ArgSize) {
 
 pub const Inst = packed struct(InstSize) {
     data: ArgSize,
-    //data: packed union {
-    //    arg3: Arg3,
-    //    arg_s: ArgS,
-    //    arg_u: ArgU,
-    //},
     op: Op,
 
     const Self = @This();
@@ -62,13 +57,19 @@ pub const Inst = packed struct(InstSize) {
         };
     }
 
-    pub inline fn args(self: Self) instType(self.op) {
-        return switch (self.op) {
-            else => |op| @bitCast(instType(op), self.data),
-        };
+    pub inline fn argu(self: Self) ArgU {
+        return @bitCast(ArgU, self.data);
     }
 
-    pub inline fn instType(op: Op) type {
+    pub inline fn args(self: Self) ArgS {
+        return @bitCast(ArgS, self.data);
+    }
+
+    pub inline fn arg3(self: Self) Arg3 {
+        return @bitCast(Arg3, self.data);
+    }
+
+    pub inline fn instType(comptime op: Op) type {
         return switch (op) {
             // returns values in the registers a to b
             .ret => Arg3,

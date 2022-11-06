@@ -2,10 +2,10 @@ const std = @import("std");
 const os = std.os;
 const sys = std.os.system;
 const STDIN = 0;
-const Vm = @import("vm").Vm;
-const Compiler = @import("compiler").Compiler;
+const Vm = @import("vm.zig").Vm;
+const Compiler = @import("compiler.zig").Compiler;
 
-const Repl = struct {
+pub const Repl = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
@@ -18,7 +18,7 @@ const Repl = struct {
 
         var self = Self{
             .allocator = allocator,
-            .vm = Vm{},
+            .vm = Vm.init(allocator),
             .compiler = Compiler{},
             .og = try os.tcgetattr(STDIN),
         };
@@ -45,7 +45,7 @@ const Repl = struct {
         return self;
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         self.vm.deinit();
         // restore original settings
         os.tcsetattr(STDIN, sys.TCSA.FLUSH, self.og) catch unreachable;
