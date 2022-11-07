@@ -14,51 +14,32 @@ pub const Pair = struct {
 
 pub const String = struct {
     len: usize,
-    bytes: [:0]u8,
+    bytes: [*]u8,
+
+    pub fn init(allocator: std.mem.Allocator, str: []const u8) !*String {
+        var ptr = try allocator.alignedAlloc(u8, @alignOf(String), @sizeOf(String) + str.len);
+
+        var str_ptr = @ptrCast(*String, ptr);
+        str_ptr.len = str.len;
+
+        var bytes = @ptrCast([*]u8, &str_ptr.bytes);
+
+        for (str) |b, i| {
+            bytes[i] = b;
+        }
+
+        return str_ptr;
+    }
+
+    pub fn deinit(self: *String, allocator: std.mem.Allocator) void {
+        const buf = @ptrCast([*]u8, self)[0 .. @sizeOf(String) + self.len];
+        allocator.free(buf);
+    }
+
+    pub fn slice(self: *String) []u8 {
+        return @ptrCast([*]u8, &self.bytes)[0..self.len];
+    }
 };
-
-// pub const ObjType = enum(u4) {
-//     pair,
-//     string,
-//
-//     pub fn Type(comptime self: @This()) type {
-//         return switch (self) {
-//             .pair => Pair,
-//             .string => String,
-//         };
-//     }
-// };
-//
-// pub const Obj = packed struct(usize) {
-//     ot: ObjType,
-//     ptr_int: u60,
-//
-//     pub fn ptr(self: @This(), comptime T: type) *T {
-//         var ret_ptr: usize = @as(usize, self.ptr_int) << @bitSizeOf(ObjType);
-//         return @intToPtr(*T, ret_ptr);
-//     }
-//
-//     pub fn fromPtr(comptime ot: ObjType, o_ptr: *align(4) ot.Type()) @This() {
-//         return .{
-//             .ot = ot,
-//             .ptr_int = @truncate(u60, @ptrToInt(o_ptr) >> @bitSizeOf(ObjType)),
-//         };
-//     }
-// };
-
-// test "ptr" {
-//     const alloc = std.testing.allocator;
-//
-//     var pairs = try alloc.alignedAlloc(Pair, 4, 1);
-//     defer alloc.free(pairs);
-//     var pair = &pairs[0];
-//     pair.* = Pair{
-//         .car = Value.empty,
-//         .cdr = Value.empty,
-//     };
-//     var obj = Obj.fromPtr(.pair, pair);
-//     try std.testing.expect(@ptrToInt(obj.ptr(Pair)) == @ptrToInt(pair));
-// }
 
 pub const Value = union(ValueType) {
     /// float/number type
@@ -68,7 +49,7 @@ pub const Value = union(ValueType) {
     /// this value is true or false
     boolean: bool,
     /// string of characters
-    string: usize,
+    string: *String,
 
     pub inline fn sameType(a: Value, b: Value) bool {
         return std.meta.activeTag(a) == std.meta.activeTag(b);
@@ -126,5 +107,5 @@ test "assert" {
     // try Value.assertType(.float, v);
     std.debug.print("{}\n", .{@sizeOf(Value)});
     // TODO: pack these bih
-    try std.testing.expect(@sizeOf(Value) == 12);
+    try std.testing.expect(@sizeOf(Value) == 16);
 }

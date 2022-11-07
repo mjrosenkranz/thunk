@@ -145,8 +145,7 @@ pub const Compiler = struct {
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
                 // record symbol in imm
 
-                // TODO: this should be copied in by an allocator since the src lifetime will
-                // end some point after compilation
+                // TODO: intern the strings!
                 const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
 
                 const str_idx = try self.chunk.pushImmStr(str);
@@ -164,6 +163,24 @@ pub const Compiler = struct {
                 if (!res.found_existing) {
                     res.value_ptr.* = Value.empty;
                 }
+            },
+            // same as above
+            .set => {
+                self.parser.advance();
+                // next must be symbol
+                try self.parser.consume(.symbol, error.ExpectedSymbol);
+
+                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+
+                // TODO: intern the strings!
+                const str_idx = try self.chunk.pushImmStr(str);
+                _ = try self.chunk.pushInst(Inst.init(
+                    .set_global,
+                    .{
+                        .r = try self.expr(),
+                        .u = str_idx,
+                    },
+                ));
             },
             .asterisk => {
                 self.parser.advance();
@@ -453,7 +470,7 @@ test "define var" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    // try testing.expectEqualSlices(u8, @intToPtr(*String, chunk.imms[0].string).bytes, "foo");
+    try testing.expectEqualSlices(u8, chunk.imms[0].string.slice(), "foo");
     try testing.expect(chunk.imms[1].float == 13);
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 1 }),

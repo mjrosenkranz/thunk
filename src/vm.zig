@@ -4,6 +4,7 @@ const Chunk = @import("chunk.zig").Chunk;
 const Compiler = @import("compiler.zig").Compiler;
 const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
+const String = @import("value.zig").String;
 const Env = @import("env.zig").Env;
 /// virtual machine for interpreting our op-codes
 pub const Vm = struct {
@@ -93,10 +94,17 @@ pub const Vm = struct {
                     self.regs[args.r] = try self.regs[args.r].div(chunk.imms[args.u]);
                 },
                 .define_global => {
-                    //const args = inst.argu();
-                    //const imm = chunk.imms[args.u];
-                    //try Value.assertType(.string, imm);
-                    //try self.env.map.put(imm.string, self.regs[args.r]);
+                    const args = inst.argu();
+                    const imm = chunk.imms[args.u];
+                    try Value.assertType(.string, imm);
+                    const str = imm.string;
+                    try self.env.map.put(str.slice(), self.regs[args.r]);
+                },
+                .set_global => {
+                    const args = inst.argu();
+                    const imm = chunk.imms[args.u];
+                    try Value.assertType(.string, imm);
+                    try self.env.map.put(imm.string.slice(), self.regs[args.r]);
                 },
             }
 
@@ -401,11 +409,33 @@ test "define var" {
 
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
-    var chunk = Chunk{};
+    var chunk = Chunk.init(testing.allocator);
+    defer chunk.deinit();
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk, &vm.env);
 
     try vm.exec(&chunk);
 
     try testing.expect(vm.env.map.get("foo").?.float == 13);
+}
+
+test "set var" {
+    const code =
+        \\(set! foo 32)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    // create a variable in the env
+    try vm.env.map.put("foo", .{ .float = 32 });
+
+    var chunk = Chunk.init(testing.allocator);
+    defer chunk.deinit();
+    var compiler = Compiler{};
+    _ = try compiler.compile(code, &chunk, &vm.env);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.env.map.get("foo").?.float == 32);
 }

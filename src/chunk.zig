@@ -20,7 +20,7 @@ pub const Chunk = struct {
     /// offset in the inst array
     n_inst: usize = 0,
     /// immediate values that might be refered to
-    imms: [MAX_IMMS]Value = undefined,
+    imms: [MAX_IMMS]Value = [_]Value{Value.empty} ** MAX_IMMS,
     /// offset in the imms array
     n_imms: usize = 0,
 
@@ -34,7 +34,14 @@ pub const Chunk = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
+        for (self.imms) |imm| {
+            switch (imm) {
+                .string => |str| {
+                    str.deinit(self.allocator);
+                },
+                else => {},
+            }
+        }
     }
 
     pub fn clear(self: *Self) void {
@@ -90,10 +97,9 @@ pub const Chunk = struct {
             return error.TooManyImmediates;
         }
         // allocate it
-        var ptr = try self.allocator.alignedAlloc(u8, @alignOf(String), @sizeOf(String) + str.len + 1);
-
+        const str_ptr = try String.init(self.allocator, str);
         // push it
-        return try self.pushImm(.{ .string = @ptrToInt(@ptrCast(*String, ptr)) });
+        return try self.pushImm(.{ .string = str_ptr });
     }
 
     pub fn fromSlice(insts: []const Inst) !Self {

@@ -20,6 +20,7 @@ pub const Op = enum(OpSize) {
     div,
     divimm,
     define_global,
+    set_global,
 };
 
 /// Typesafe register arguments
@@ -98,6 +99,8 @@ pub const Inst = packed struct(InstSize) {
 
             // define a global variable where the symbol name is in u and value in r
             .define_global => ArgU,
+
+            .set_global => ArgU,
         };
     }
 };
