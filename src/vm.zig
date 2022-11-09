@@ -45,78 +45,87 @@ pub const Vm = struct {
         };
     }
 
+    pub fn step(self: *Self, chunk: *Chunk) !void {
+        if (self.ip >= chunk.n_inst) return error.PastChunkEnd;
+
+        const inst = chunk.code[self.ip];
+
+        if (self.config.debug_trace) {
+            // chunk.disassembleInst(self.ip, inst);
+        }
+
+        switch (inst.op) {
+            .ret => {},
+            // nothing to do with a load for now so we can just print it
+            .load => {
+                const args = inst.argu();
+                self.regs[args.r] = chunk.imms[args.u];
+            },
+            .add => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].add(self.regs[args.r2]);
+            },
+            .addimm => {
+                const args = inst.argu();
+                self.regs[args.r] = try self.regs[args.r].add(chunk.imms[args.u]);
+            },
+            .sub => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].sub(self.regs[args.r2]);
+            },
+            .subimm => {
+                const args = inst.argu();
+                self.regs[args.r] = try self.regs[args.r].sub(chunk.imms[args.u]);
+            },
+            .mul => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].mul(self.regs[args.r2]);
+            },
+            .mulimm => {
+                const args = inst.argu();
+                self.regs[args.r] = try self.regs[args.r].mul(chunk.imms[args.u]);
+            },
+            .div => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].div(self.regs[args.r2]);
+            },
+            .divimm => {
+                const args = inst.argu();
+                self.regs[args.r] = try self.regs[args.r].div(chunk.imms[args.u]);
+            },
+            .define_global => {
+                const args = inst.argu();
+                const imm = chunk.imms[args.u];
+                try Value.assertType(.string, imm);
+                const str = imm.string;
+                try self.env.map.put(str.slice(), self.regs[args.r]);
+            },
+            .set_global => {
+                const args = inst.argu();
+                const imm = chunk.imms[args.u];
+                try Value.assertType(.string, imm);
+                try self.env.map.put(imm.string.slice(), self.regs[args.r]);
+            },
+        }
+
+        self.ip += 1;
+    }
+
     /// executes all the instructions in a chunk
     pub fn exec(self: *Self, chunk: *Chunk) !void {
         while (self.ip < chunk.n_inst) {
-            const inst = chunk.code[self.ip];
-
-            if (self.config.debug_trace) {
-                // chunk.disassembleInst(self.ip, inst);
-            }
-
-            switch (inst.op) {
-                .ret => return,
-                // nothing to do with a load for now so we can just print it
-                .load => {
-                    const args = inst.argu();
-                    self.regs[args.r] = chunk.imms[args.u];
-                },
-                .add => {
-                    const args = inst.arg3();
-                    self.regs[args.r] = try self.regs[args.r1].add(self.regs[args.r2]);
-                },
-                .addimm => {
-                    const args = inst.argu();
-                    self.regs[args.r] = try self.regs[args.r].add(chunk.imms[args.u]);
-                },
-                .sub => {
-                    const args = inst.arg3();
-                    self.regs[args.r] = try self.regs[args.r1].sub(self.regs[args.r2]);
-                },
-                .subimm => {
-                    const args = inst.argu();
-                    self.regs[args.r] = try self.regs[args.r].sub(chunk.imms[args.u]);
-                },
-                .mul => {
-                    const args = inst.arg3();
-                    self.regs[args.r] = try self.regs[args.r1].mul(self.regs[args.r2]);
-                },
-                .mulimm => {
-                    const args = inst.argu();
-                    self.regs[args.r] = try self.regs[args.r].mul(chunk.imms[args.u]);
-                },
-                .div => {
-                    const args = inst.arg3();
-                    self.regs[args.r] = try self.regs[args.r1].div(self.regs[args.r2]);
-                },
-                .divimm => {
-                    const args = inst.argu();
-                    self.regs[args.r] = try self.regs[args.r].div(chunk.imms[args.u]);
-                },
-                .define_global => {
-                    const args = inst.argu();
-                    const imm = chunk.imms[args.u];
-                    try Value.assertType(.string, imm);
-                    const str = imm.string;
-                    try self.env.map.put(str.slice(), self.regs[args.r]);
-                },
-                .set_global => {
-                    const args = inst.argu();
-                    const imm = chunk.imms[args.u];
-                    try Value.assertType(.string, imm);
-                    try self.env.map.put(imm.string.slice(), self.regs[args.r]);
-                },
-            }
-
-            self.ip += 1;
+            try self.step(chunk);
         }
 
-        // if we get here we ran out of instructions in the chunk
-        // this means that the chunk did not end with a return and we
-        // should throw an error
-        // TODO: this should maybe be handled differently?
-        // is there a case where a chunk should just end?
-        return error.UnexpectedEnd;
+        if (chunk.code[self.ip - 1].op != .ret) {
+
+            // if we get here we ran out of instructions in the chunk
+            // this means that the chunk did not end with a return and we
+            // should throw an error
+            // TODO: this should maybe be handled differently?
+            // is there a case where a chunk should just end?
+            return error.UnexpectedEnd;
+        }
     }
 };
 
@@ -433,7 +442,11 @@ test "set var" {
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk, &vm.env);
 
-    try vm.exec(&chunk);
+    try vm.step(&chunk);
+    try vm.step(&chunk);
+    try testing.expect(vm.env.map.get("foo").?.float == 13);
+    try vm.step(&chunk);
+    try vm.step(&chunk);
 
     try testing.expect(vm.env.map.get("foo").?.float == 32);
 }
