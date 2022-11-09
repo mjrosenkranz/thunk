@@ -62,15 +62,77 @@ pub const Compiler = struct {
         self.chunk = chunk;
         self.global_env = env;
 
-        _ = try self.expr();
+        while (!self.parser.match(.eof)) {
+            _ = try self.statement();
+        }
 
-        // TODO: eof
         try self.parser.consume(.eof, error.ExpectedEOF);
 
         // add a return
         _ = try chunk.pushInst(Inst.init(.ret, .{}));
-
         return false;
+    }
+
+    fn statement(self: *Self) anyerror!Reg {
+        if (self.parser.match(.lparen)) {
+            self.parser.advance();
+        } else {
+            // otherwise pass on to expression
+            return try self.expr();
+        }
+
+        // if we have a keyword that is a statement, do that
+        switch (self.parser.curr.tag) {
+            .define => {
+                self.parser.advance();
+                // TODO: lambda def list
+                // next must be symbol
+                try self.parser.consume(.symbol, error.ExpectedSymbol);
+                // record symbol in imm
+
+                // TODO: intern the strings!
+                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+
+                const str_idx = try self.chunk.pushImmStr(str);
+                // get reg from following expr
+                _ = try self.chunk.pushInst(Inst.init(
+                    .define_global,
+                    .{
+                        .r = try self.expr(),
+                        .u = str_idx,
+                    },
+                ));
+
+                // create a slot in the global env for the variable
+                var res = try self.global_env.map.getOrPut(str);
+                if (!res.found_existing) {
+                    res.value_ptr.* = Value.empty;
+                }
+            },
+            // same as above
+            .set => {
+                self.parser.advance();
+                // next must be symbol
+                try self.parser.consume(.symbol, error.ExpectedSymbol);
+
+                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+
+                // TODO: intern the strings!
+                const str_idx = try self.chunk.pushImmStr(str);
+                _ = try self.chunk.pushInst(Inst.init(
+                    .set_global,
+                    .{
+                        .r = try self.expr(),
+                        .u = str_idx,
+                    },
+                ));
+            },
+            else => return self.list(),
+        }
+
+        try self.parser.consume(.rparen, error.ExpectedClosingParen);
+
+        return 0;
     }
 
     /// parses/compiles an expression
@@ -127,6 +189,10 @@ pub const Compiler = struct {
                 self.parser.advance();
                 reg = try self.list();
             },
+            .rparen => {
+                // rparen should be taken care of by list
+                return CompileErrors.ExpectedEOF;
+            },
             .plus => {
                 // TODO: should be able to safely discard all registers here
                 // since this expression is immediate
@@ -136,51 +202,6 @@ pub const Compiler = struct {
             .minus => {
                 self.parser.advance();
                 reg = try self.binop(.sub);
-            },
-            // TODO: technically not an expr, statement??
-            .define => {
-                self.parser.advance();
-                // TODO: lambda def list
-                // next must be symbol
-                try self.parser.consume(.symbol, error.ExpectedSymbol);
-                // record symbol in imm
-
-                // TODO: intern the strings!
-                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
-
-                const str_idx = try self.chunk.pushImmStr(str);
-                // get reg from following expr
-                _ = try self.chunk.pushInst(Inst.init(
-                    .define_global,
-                    .{
-                        .r = try self.expr(),
-                        .u = str_idx,
-                    },
-                ));
-
-                // create a slot in the global env for the variable
-                var res = try self.global_env.map.getOrPut(str);
-                if (!res.found_existing) {
-                    res.value_ptr.* = Value.empty;
-                }
-            },
-            // same as above
-            .set => {
-                self.parser.advance();
-                // next must be symbol
-                try self.parser.consume(.symbol, error.ExpectedSymbol);
-
-                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
-
-                // TODO: intern the strings!
-                const str_idx = try self.chunk.pushImmStr(str);
-                _ = try self.chunk.pushInst(Inst.init(
-                    .set_global,
-                    .{
-                        .r = try self.expr(),
-                        .u = str_idx,
-                    },
-                ));
             },
             .asterisk => {
                 self.parser.advance();
@@ -228,12 +249,12 @@ pub const Compiler = struct {
     /// parses/compiles a non quoted list ()
     fn list(self: *Self) anyerror!Reg {
         // if the next value is a right paren then this is invalid
-        if (self.parser.curr.tag == .rparen) {
+        if (self.parser.match(.rparen)) {
             return CompileErrors.ExpectedSubexpression;
         }
         var last: Reg = 0;
         while (true) {
-            if (self.parser.curr.tag == .rparen or self.parser.curr.tag == .eof) {
+            if (self.parser.match(.rparen) or self.parser.match(.eof)) {
                 try self.parser.consume(.rparen, error.ExpectedClosingParen);
                 return last;
             }
@@ -263,9 +284,14 @@ pub const Parser = struct {
         self.curr = self.scanner.next();
     }
 
+    /// shorthand for if the current token tag is expected
+    pub inline fn match(self: Self, tag: Tag) bool {
+        return self.curr.tag == tag;
+    }
+
     /// we expect the current token to have tag, if not we throw err
     pub fn consume(self: *Self, tag: Tag, err: anyerror) !void {
-        if (self.curr.tag == tag) {
+        if (self.match(tag)) {
             self.advance();
             return;
         }
@@ -336,6 +362,18 @@ test "no closing" {
     try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk, &env));
 }
 
+test "too many closing" {
+    const code =
+        \\(125))
+    ;
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileErrors.ExpectedEOF, compiler.compile(code, &chunk, &env));
+}
+
 test "no opening" {
     const code =
         \\125)
@@ -346,6 +384,18 @@ test "no opening" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expectError(CompileErrors.ExpectedEOF, compiler.compile(code, &chunk, &env));
+}
+
+test "too many closing" {
+    const code =
+        \\((125)
+    ;
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileErrors.ExpectedClosingParen, compiler.compile(code, &chunk, &env));
 }
 
 test "empty expression" {
@@ -475,6 +525,33 @@ test "define var" {
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 1 }),
         Inst.init(.define_global, .{ .u = 0, .r = 1 }),
+        Inst.init(.ret, .{}),
+    }, chunk.code[0..chunk.n_inst]);
+
+    try testing.expect(env.map.get("foo") != null);
+}
+
+test "define var" {
+    const code =
+        \\(define foo 13)
+        \\(set! foo 43)
+    ;
+
+    var chunk = Chunk.init(testing.allocator);
+    defer chunk.deinit();
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expectEqualSlices(u8, chunk.imms[0].string.slice(), "foo");
+    try testing.expect(chunk.imms[1].float == 13);
+    try testing.expectEqualSlices(u8, chunk.imms[2].string.slice(), "foo");
+    try testing.expect(chunk.imms[3].float == 43);
+    try testing.expectEqualSlices(Inst, &.{
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        Inst.init(.define_global, .{ .u = 0, .r = 1 }),
+        Inst.init(.load, .{ .r = 2, .u = 3 }),
+        Inst.init(.set_global, .{ .u = 2, .r = 2 }),
         Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
 

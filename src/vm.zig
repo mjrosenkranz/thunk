@@ -421,14 +421,12 @@ test "define var" {
 
 test "set var" {
     const code =
+        \\(define foo 13)
         \\(set! foo 32)
     ;
 
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
-
-    // create a variable in the env
-    try vm.env.map.put("foo", .{ .float = 32 });
 
     var chunk = Chunk.init(testing.allocator);
     defer chunk.deinit();
