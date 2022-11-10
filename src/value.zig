@@ -51,6 +51,13 @@ pub const Value = union(ValueType) {
     /// string of characters
     string: *String,
 
+    pub inline fn truthy(v: Value) bool {
+        return switch (v) {
+            .boolean => |b| b,
+            else => true,
+        };
+    }
+
     pub inline fn sameType(a: Value, b: Value) bool {
         return std.meta.activeTag(a) == std.meta.activeTag(b);
     }
@@ -108,4 +115,14 @@ test "assert" {
     std.debug.print("{}\n", .{@sizeOf(Value)});
     // TODO: pack these bih
     try std.testing.expect(@sizeOf(Value) == 16);
+}
+
+test "truthy" {
+    const t = Value{ .boolean = true };
+    const f = Value{ .boolean = false };
+    const v = Value{ .float = 32 };
+
+    try std.testing.expect(t.truthy() == true);
+    try std.testing.expect(v.truthy() == true);
+    try std.testing.expect(f.truthy() == false);
 }

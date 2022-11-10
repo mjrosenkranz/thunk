@@ -12,7 +12,8 @@ pub const Op = enum(OpSize) {
     ret,
     load,
     jmp,
-    eq,
+    eq_true,
+    eq_false,
     add,
     addimm,
     mul,
@@ -114,7 +115,9 @@ pub const Inst = packed struct(InstSize) {
             // change ip by i
             .jmp => ArgI,
             // if the value in reg r is truthy then skip next inst
-            .eq => Arg3,
+            .eq_true => Arg3,
+            // if the value in reg r is false then skip next inst
+            .eq_false => Arg3,
         };
     }
 };

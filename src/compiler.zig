@@ -576,10 +576,35 @@ test "if statement" {
         // load the test
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // test if r1 is false (test skips over next inst if false)
+        Inst.init(.eq_false, .{ .r = 1 }),
         // jump over next inst
+        Inst.init(.jmp, 1),
         // load thn into reg 2
         Inst.init(.load, .{ .r = 2, .u = 1 }),
         // load els into reg 2
         Inst.init(.load, .{ .r = 2, .u = 2 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "if statement no else" {
+    const code =
+        \\(if #t 12)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expect(true == chunk.imms[0].boolean);
+    try testing.expect(12 == chunk.imms[1].float);
+    try testing.expect(-3 == chunk.imms[2].float);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load the test
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if r1 is false
+        Inst.init(.eq_false, .{ .r = 1 }),
+        // load thn into reg 2
+        Inst.init(.load, .{ .r = 2, .u = 1 }),
     }, chunk.code[0..chunk.n_inst]);
 }
