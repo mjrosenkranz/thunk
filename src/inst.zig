@@ -11,6 +11,8 @@ pub const InstSize = u32;
 pub const Op = enum(OpSize) {
     ret,
     load,
+    jmp,
+    eq,
     add,
     addimm,
     mul,
@@ -45,6 +47,10 @@ pub const ArgU = packed struct(ArgSize) {
     r: Reg = 0,
 };
 
+/// arguments for instruction with an unsigned argument
+/// TODO: should this be signed?
+pub const ArgI = ArgSize;
+
 pub const Inst = packed struct(InstSize) {
     data: ArgSize,
     op: Op,
@@ -68,6 +74,10 @@ pub const Inst = packed struct(InstSize) {
 
     pub inline fn arg3(self: Self) Arg3 {
         return @bitCast(Arg3, self.data);
+    }
+
+    pub inline fn argi(self: Self) ArgI {
+        return @bitCast(ArgI, self.data);
     }
 
     pub inline fn instType(comptime op: Op) type {
@@ -99,8 +109,12 @@ pub const Inst = packed struct(InstSize) {
 
             // define a global variable where the symbol name is in u and value in r
             .define_global => ArgU,
-
+            //set value of global variable where symbol name is in u and value in r
             .set_global => ArgU,
+            // change ip by i
+            .jmp => ArgI,
+            // if the value in reg r is truthy then skip next inst
+            .eq => Arg3,
         };
     }
 };

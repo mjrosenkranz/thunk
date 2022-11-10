@@ -73,6 +73,7 @@ pub const Compiler = struct {
         return false;
     }
 
+    // TODO: this should be maybe register
     fn statement(self: *Self) anyerror!Reg {
         if (self.parser.match(.lparen)) {
             self.parser.advance();
@@ -556,4 +557,29 @@ test "define var" {
     }, chunk.code[0..chunk.n_inst]);
 
     try testing.expect(env.map.get("foo") != null);
+}
+
+test "if statement" {
+    const code =
+        \\(if #t 12 -3)
+    ;
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expect(true == chunk.imms[0].boolean);
+    try testing.expect(12 == chunk.imms[1].float);
+    try testing.expect(-3 == chunk.imms[2].float);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load the test
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if r1 is false (test skips over next inst if false)
+        // jump over next inst
+        // load thn into reg 2
+        Inst.init(.load, .{ .r = 2, .u = 1 }),
+        // load els into reg 2
+        Inst.init(.load, .{ .r = 2, .u = 2 }),
+    }, chunk.code[0..chunk.n_inst]);
 }
