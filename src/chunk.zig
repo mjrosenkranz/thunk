@@ -108,113 +108,19 @@ pub const Chunk = struct {
         return self;
     }
 
-    // /// disassemble an instruction, used for debug only
-    // pub fn disassemble(self: Self) void {
-    //     std.debug.print("chunk code_len: {} imms_len: {}\n", .{
-    //         self.n_inst,
-    //         self.n_imms,
-    //     });
-    //     var i: usize = 0;
-    //     while (i < self.n_inst) : (i += 1) {
-    //         self.disassembleInst(i, self.code[i]);
-    //     }
-    // }
-
-    // pub inline fn disassembleInst(self: Self, offset: usize, inst: Inst) void {
-    //     const offset_fmt = "{d:0>4}: ";
-    //     switch (inst.op) {
-    //         .ret => |args| std.debug.print(offset_fmt ++ "ret: a: {} b: {} c: {}\n", .{
-    //             offset,
-    //             args.r,
-    //             args.r1,
-    //             args.r2,
-    //         }),
-    //         .load => |args| {
-    //             std.debug.print(offset_fmt ++ "load: imm[{}] ({d:.2}) into reg{}\n", .{
-    //                 offset,
-    //                 args.u,
-    //                 self.imms[args.u].float,
-    //                 args.r,
-    //             });
-    //         },
-    //         .add => |args| {
-    //             std.debug.print(offset_fmt ++ "add: reg[{}] = reg[{}] + reg[{}]\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r1,
-    //                 args.r2,
-    //             });
-    //         },
-    //         .addimm => |args| {
-    //             std.debug.print(offset_fmt ++ "addimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r,
-    //                 args.u,
-    //                 self.imms[args.u].float,
-    //             });
-    //         },
-    //         .sub => |args| {
-    //             std.debug.print(offset_fmt ++ "sub: reg[{}] = reg[{}] + reg[{}]\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r1,
-    //                 args.r2,
-    //             });
-    //         },
-    //         .subimm => |args| {
-    //             std.debug.print(offset_fmt ++ "subimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r,
-    //                 args.u,
-    //                 self.imms[args.u].float,
-    //             });
-    //         },
-    //         .mul => |args| {
-    //             std.debug.print(offset_fmt ++ "mul: reg[{}] = reg[{}] + reg[{}]\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r1,
-    //                 args.r2,
-    //             });
-    //         },
-    //         .mulimm => |args| {
-    //             std.debug.print(offset_fmt ++ "mulimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r,
-    //                 args.u,
-    //                 self.imms[args.u].float,
-    //             });
-    //         },
-
-    //         .div => |args| {
-    //             std.debug.print(offset_fmt ++ "div: reg[{}] = reg[{}] + reg[{}]\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r1,
-    //                 args.r2,
-    //             });
-    //         },
-    //         .divimm => |args| {
-    //             std.debug.print(offset_fmt ++ "divimm: reg[{}] = reg[{}] + imm[{}] ({d:.1})\n", .{
-    //                 offset,
-    //                 args.r,
-    //                 args.r,
-    //                 args.u,
-    //                 self.imms[args.u].float,
-    //             });
-    //         },
-    //         .define_global => |args| {
-    //             std.debug.print(offset_fmt ++ "define: <global {s}> = reg[{}]\n", .{
-    //                 offset,
-    //                 self.imms[args.u].string,
-    //                 args.r,
-    //             });
-    //         },
-    //     }
-    // }
+    /// disassemble an instruction, used for debug only
+    pub fn disassemble(self: Self) void {
+        std.debug.print("chunk code_len: {} imms_len: {}\n", .{
+            self.n_inst,
+            self.n_imms,
+        });
+        var i: usize = 0;
+        while (i < self.n_inst) : (i += 1) {
+            // self.disassembleInst(i, self.code[i]);
+            self.code[i].disassemble(i);
+        }
+        std.debug.print("-------------------------------\n", .{});
+    }
 };
 
 test "chunk" {

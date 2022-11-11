@@ -55,6 +55,9 @@ pub const Vm = struct {
         }
 
         switch (inst.op) {
+            .jmp => {
+                self.ip += inst.argi();
+            },
             .ret => {},
             // nothing to do with a load for now so we can just print it
             .load => {

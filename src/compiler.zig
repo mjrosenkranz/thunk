@@ -140,6 +140,7 @@ pub const Compiler = struct {
     fn expr(self: *Self) anyerror!Reg {
         var reg: Reg = 0;
         switch (self.parser.curr.tag) {
+            // literals
             .symbol => {
                 // we have nothing to do for symbols rn
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
@@ -186,14 +187,61 @@ pub const Compiler = struct {
                     },
                 ));
             },
-            .lparen => {
+
+            // conditionals
+            .@"if" => {
                 self.parser.advance();
-                reg = try self.list();
+                // register the result is stored in
+                reg = try self.allocReg();
+
+                // get test expr
+                const tst = try self.expr();
+
+                // add test
+                _ = try self.chunk.pushInst(
+                    Inst.init(.eq_false, .{ .r = tst }),
+                );
+
+                // jump over then expr
+                const thn_jump_idx = try self.chunk.pushInst(
+                    Inst.init(.jmp, 0),
+                );
+
+                // load then expr
+                // TODO: catch error if expr no exist
+                const thn = try self.expr();
+                // move the then branch
+                const thn_end_idx = try self.chunk.pushInst(
+                    Inst.init(.move, .{
+                        .r = reg,
+                        .r1 = thn,
+                    }),
+                );
+
+                self.chunk.code[thn_jump_idx].data = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx) + 1;
+
+                // if current is not a paren, then there is an else expression
+                if (!self.parser.match(.rparen)) {
+                    // TODO: patch this with correct number of inst
+                    // jump over else
+                    const els_jump_idx = try self.chunk.pushInst(
+                        Inst.init(.jmp, 0),
+                    );
+                    // add a jump for
+                    const els = try self.expr();
+                    // move the else branch
+                    const els_end_idx = try self.chunk.pushInst(
+                        Inst.init(.move, .{
+                            .r = reg,
+                            .r1 = els,
+                        }),
+                    );
+
+                    self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx) + 1;
+                }
             },
-            .rparen => {
-                // rparen should be taken care of by list
-                return CompileErrors.ExpectedEOF;
-            },
+
+            // TODO: these should be builtin proceedures
             .plus => {
                 // TODO: should be able to safely discard all registers here
                 // since this expression is immediate
@@ -212,7 +260,17 @@ pub const Compiler = struct {
                 self.parser.advance();
                 reg = try self.binop(.div);
             },
+            // delimiters
+            .lparen => {
+                self.parser.advance();
+                reg = try self.list();
+            },
+            .rparen => {
+                // rparen should be taken care of by list
+                return CompileErrors.ExpectedEOF;
+            },
             .eof => {},
+
             else => {
                 std.debug.print("unexpected tag {}\n", .{self.parser.curr.tag});
                 return error.ExpectedExpression;
@@ -574,15 +632,25 @@ test "if statement" {
 
     try testing.expectEqualSlices(Inst, &.{
         // load the test
-        Inst.init(.load, .{ .r = 1, .u = 0 }),
-        // test if r1 is false (test skips over next inst if false)
-        Inst.init(.eq_false, .{ .r = 1 }),
-        // jump over next inst
-        Inst.init(.jmp, 1),
-        // load thn into reg 2
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
-        // load els into reg 2
-        Inst.init(.load, .{ .r = 2, .u = 2 }),
+        Inst.init(.load, .{ .r = 2, .u = 0 }),
+        // test if r1 is false (test skips over jump if false)
+        Inst.init(.eq_false, .{ .r = 2 }),
+        // jump over thn branch
+        Inst.init(.jmp, 3),
+        // thn branch
+        // load 12 into r3
+        Inst.init(.load, .{ .r = 3, .u = 1 }),
+        // move into result register
+        Inst.init(.move, .{ .r = 1, .r1 = 3 }),
+        // jump over else branch
+        Inst.init(.jmp, 3),
+        //-----------------------------
+        // else branch
+        Inst.init(.load, .{ .r = 4, .u = 2 }),
+        Inst.init(.move, .{ .r = 1, .r1 = 4 }),
+        // -----------------------
+        // return
+        Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
 }
 
@@ -597,14 +665,21 @@ test "if statement no else" {
     _ = try compiler.compile(code, &chunk, &env);
     try testing.expect(true == chunk.imms[0].boolean);
     try testing.expect(12 == chunk.imms[1].float);
-    try testing.expect(-3 == chunk.imms[2].float);
 
     try testing.expectEqualSlices(Inst, &.{
         // load the test
-        Inst.init(.load, .{ .r = 1, .u = 0 }),
-        // test if r1 is false
-        Inst.init(.eq_false, .{ .r = 1 }),
-        // load thn into reg 2
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
+        Inst.init(.load, .{ .r = 2, .u = 0 }),
+        // test if r1 is false (test skips over jump if false)
+        Inst.init(.eq_false, .{ .r = 2 }),
+        // jump over thn branch
+        Inst.init(.jmp, 3),
+        // thn branch
+        // load 12 into r3
+        Inst.init(.load, .{ .r = 3, .u = 1 }),
+        // move into result register
+        Inst.init(.move, .{ .r = 1, .r1 = 3 }),
+        //-----------------------------
+
+        Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
 }
