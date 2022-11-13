@@ -110,14 +110,20 @@ pub const Chunk = struct {
 
     /// disassemble an instruction, used for debug only
     pub fn disassemble(self: Self) void {
-        std.debug.print("chunk code_len: {} imms_len: {}\n", .{
-            self.n_inst,
-            self.n_imms,
-        });
-        var i: usize = 0;
-        while (i < self.n_inst) : (i += 1) {
-            // self.disassembleInst(i, self.code[i]);
-            self.code[i].disassemble(i);
+        std.debug.print("immediates:\n", .{});
+        {
+            var i: usize = 0;
+            while (i < self.n_imms) : (i += 1) {
+                std.debug.print("imms[{}]: {}\n", .{ i, self.imms[i] });
+            }
+        }
+
+        std.debug.print("chunk code_len: {}\n", .{self.n_inst});
+        {
+            var i: usize = 0;
+            while (i < self.n_inst) : (i += 1) {
+                self.code[i].disassemble(i);
+            }
         }
         std.debug.print("-------------------------------\n", .{});
     }
@@ -136,7 +142,7 @@ test "chunk" {
     _ = try chunk.pushImm(.{ .float = 23.3 });
 
     std.debug.print("\n", .{});
-    // chunk.disassemble();
+    chunk.disassemble();
 
     chunk.clear();
     try std.testing.expect(chunk.n_inst == 0);

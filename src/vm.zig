@@ -492,8 +492,6 @@ test "if statement" {
 
     try vm.exec(&chunk);
 
-    std.debug.print("reg[5]: {}\n", .{vm.regs[5]});
-
     try testing.expect(vm.regs[1].float == 12);
     try testing.expect(vm.regs[5].float == -3);
 }

@@ -526,7 +526,7 @@ pub fn testScanner(
     var scan = Scanner.init(src);
     for (strs) |str, i| {
         const t = scan.next();
-        std.debug.print("{}: '{s}'\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
+        // std.debug.print("{}: '{s}'\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
         try testing.expect(std.mem.eql(
             u8,
             scan.buf[t.loc.start..t.loc.end],
