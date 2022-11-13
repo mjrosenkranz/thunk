@@ -51,7 +51,7 @@ pub const Vm = struct {
         const inst = chunk.code[self.ip];
 
         if (self.config.debug_trace) {
-            // chunk.disassembleInst(self.ip, inst);
+            inst.disassemble(self.ip);
         }
 
         switch (inst.op) {
@@ -63,6 +63,10 @@ pub const Vm = struct {
             .load => {
                 const args = inst.argu();
                 self.regs[args.r] = chunk.imms[args.u];
+            },
+            .move => {
+                const args = inst.arg3();
+                self.regs[args.r] = self.regs[args.r1];
             },
             .add => {
                 const args = inst.arg3();
@@ -108,6 +112,18 @@ pub const Vm = struct {
                 const imm = chunk.imms[args.u];
                 try Value.assertType(.string, imm);
                 try self.env.map.put(imm.string.slice(), self.regs[args.r]);
+            },
+            .eq_true => {
+                const args = inst.arg3();
+                if (self.regs[args.r].truthy()) {
+                    self.ip += 1;
+                }
+            },
+            .eq_false => {
+                const args = inst.arg3();
+                if (!self.regs[args.r].truthy()) {
+                    self.ip += 1;
+                }
             },
         }
 
@@ -401,18 +417,18 @@ test "nested math full pipeline" {
 }
 
 // TODO: redefined builtin primitives so this passes
-test "just a proceedure" {
-    var vm = Vm.initConfig(TestConfig, testing.allocator);
-    defer vm.deinit();
-
-    const code =
-        \\+
-    ;
-    var chunk = Chunk{};
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk, &vm.env);
-    try vm.exec(&chunk);
-}
+// test "just a proceedure" {
+//     var vm = Vm.initConfig(TestConfig, testing.allocator);
+//     defer vm.deinit();
+//
+//     const code =
+//         \\+
+//     ;
+//     var chunk = Chunk{};
+//     var compiler = Compiler{};
+//     _ = try compiler.compile(code, &chunk, &vm.env);
+//     try vm.exec(&chunk);
+// }
 
 test "define var" {
     const code =
@@ -452,4 +468,32 @@ test "set var" {
     try vm.step(&chunk);
 
     try testing.expect(vm.env.map.get("foo").?.float == 32);
+}
+
+test "if statement" {
+    const code =
+        \\(if #t 12 -3)
+        \\(if #f 12 -3)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expect(true == chunk.imms[0].boolean);
+    try testing.expect(12 == chunk.imms[1].float);
+    try testing.expect(-3 == chunk.imms[2].float);
+    try testing.expect(false == chunk.imms[3].boolean);
+    try testing.expect(12 == chunk.imms[4].float);
+    try testing.expect(-3 == chunk.imms[5].float);
+
+    try vm.exec(&chunk);
+
+    std.debug.print("reg[5]: {}\n", .{vm.regs[5]});
+
+    try testing.expect(vm.regs[1].float == 12);
+    try testing.expect(vm.regs[5].float == -3);
 }

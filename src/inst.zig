@@ -197,7 +197,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .eq_true => {
-                std.debug.print(offset_fmt ++ "eq_false: if reg[{}]: ip += 1\n", .{
+                std.debug.print(offset_fmt ++ "eq_true: if reg[{}]: ip += 1\n", .{
                     offset,
                     self.arg3().r,
                 });

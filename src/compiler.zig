@@ -199,7 +199,7 @@ pub const Compiler = struct {
 
                 // add test
                 _ = try self.chunk.pushInst(
-                    Inst.init(.eq_false, .{ .r = tst }),
+                    Inst.init(.eq_true, .{ .r = tst }),
                 );
 
                 // jump over then expr
@@ -218,12 +218,13 @@ pub const Compiler = struct {
                     }),
                 );
 
-                self.chunk.code[thn_jump_idx].data = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx) + 1;
+                // jump over the number of instructions in the thn branch
+                var thn_jump_amt = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx);
 
                 // if current is not a paren, then there is an else expression
                 if (!self.parser.match(.rparen)) {
-                    // TODO: patch this with correct number of inst
-                    // jump over else
+                    // add to the thn jump this jump instr
+                    thn_jump_amt += 1;
                     const els_jump_idx = try self.chunk.pushInst(
                         Inst.init(.jmp, 0),
                     );
@@ -237,8 +238,10 @@ pub const Compiler = struct {
                         }),
                     );
 
-                    self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx) + 1;
+                    self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx);
                 }
+
+                self.chunk.code[thn_jump_idx].data = thn_jump_amt;
             },
 
             // TODO: these should be builtin proceedures
@@ -634,7 +637,7 @@ test "if statement" {
         // load the test
         Inst.init(.load, .{ .r = 2, .u = 0 }),
         // test if r1 is false (test skips over jump if false)
-        Inst.init(.eq_false, .{ .r = 2 }),
+        Inst.init(.eq_true, .{ .r = 2 }),
         // jump over thn branch
         Inst.init(.jmp, 3),
         // thn branch
@@ -643,7 +646,7 @@ test "if statement" {
         // move into result register
         Inst.init(.move, .{ .r = 1, .r1 = 3 }),
         // jump over else branch
-        Inst.init(.jmp, 3),
+        Inst.init(.jmp, 2),
         //-----------------------------
         // else branch
         Inst.init(.load, .{ .r = 4, .u = 2 }),
@@ -670,9 +673,9 @@ test "if statement no else" {
         // load the test
         Inst.init(.load, .{ .r = 2, .u = 0 }),
         // test if r1 is false (test skips over jump if false)
-        Inst.init(.eq_false, .{ .r = 2 }),
+        Inst.init(.eq_true, .{ .r = 2 }),
         // jump over thn branch
-        Inst.init(.jmp, 3),
+        Inst.init(.jmp, 2),
         // thn branch
         // load 12 into r3
         Inst.init(.load, .{ .r = 3, .u = 1 }),
