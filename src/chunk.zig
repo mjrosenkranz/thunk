@@ -8,10 +8,10 @@ pub const Chunk = struct {
     const Self = @This();
 
     const MAX_INST = 1024;
-    const MAX_IMMS = 1024;
+    const MAX_CONSTS = 1024;
 
     pub const ChunkError = error{
-        TooManyImmediates,
+        TooManyConsts,
         TooManyInstructions,
     };
 
@@ -19,10 +19,10 @@ pub const Chunk = struct {
     code: [MAX_INST]Inst = undefined,
     /// offset in the inst array
     n_inst: usize = 0,
-    /// immediate values that might be refered to
-    imms: [MAX_IMMS]Value = [_]Value{Value.empty} ** MAX_IMMS,
-    /// offset in the imms array
-    n_imms: usize = 0,
+    /// constediate values that might be refered to
+    consts: [MAX_CONSTS]Value = [_]Value{Value.empty} ** MAX_CONSTS,
+    /// offset in the consts array
+    n_consts: usize = 0,
 
     // TOOD: remove
     allocator: std.mem.Allocator = undefined,
@@ -34,8 +34,8 @@ pub const Chunk = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.imms) |imm| {
-            switch (imm) {
+        for (self.consts) |val| {
+            switch (val) {
                 .string => |str| {
                     str.deinit(self.allocator);
                 },
@@ -50,7 +50,7 @@ pub const Chunk = struct {
 
     /// Add an instruction to this chunk
     /// returns an error if there are too many instructions
-    /// or imms in this chunk
+    /// or consts in this chunk
     pub fn pushInst(self: *Self, inst: Inst) !usize {
         if (self.n_inst >= MAX_INST) {
             return error.TooManyInstructions;
@@ -78,28 +78,28 @@ pub const Chunk = struct {
         return total_offset;
     }
 
-    pub fn pushImm(self: *Self, imm: Value) !u16 {
-        if (self.n_imms >= MAX_IMMS) {
-            return error.TooManyImmediates;
+    pub fn pushConst(self: *Self, val: Value) !u16 {
+        if (self.n_consts >= MAX_CONSTS) {
+            return error.TooManyConsts;
         }
 
-        const offset = self.n_imms;
-        self.n_imms += 1;
+        const offset = self.n_consts;
+        self.n_consts += 1;
 
-        self.imms[offset] = imm;
+        self.consts[offset] = val;
 
         return @intCast(u16, offset);
     }
 
-    pub fn pushImmStr(self: *Self, str: []const u8) !u16 {
+    pub fn pushConstStr(self: *Self, str: []const u8) !u16 {
         // check if we can even create the string
-        if (self.n_imms >= MAX_IMMS) {
-            return error.TooManyImmediates;
+        if (self.n_consts >= MAX_CONSTS) {
+            return error.TooManyConsts;
         }
         // allocate it
         const str_ptr = try String.init(self.allocator, str);
         // push it
-        return try self.pushImm(.{ .string = str_ptr });
+        return try self.pushConst(.{ .string = str_ptr });
     }
 
     pub fn fromSlice(insts: []const Inst) !Self {
@@ -110,11 +110,11 @@ pub const Chunk = struct {
 
     /// disassemble an instruction, used for debug only
     pub fn disassemble(self: Self) void {
-        std.debug.print("immediates:\n", .{});
+        std.debug.print("constediates:\n", .{});
         {
             var i: usize = 0;
-            while (i < self.n_imms) : (i += 1) {
-                std.debug.print("imms[{}]: {}\n", .{ i, self.imms[i] });
+            while (i < self.n_consts) : (i += 1) {
+                std.debug.print("consts[{}]: {}\n", .{ i, self.consts[i] });
             }
         }
 
@@ -139,7 +139,7 @@ test "chunk" {
     try std.testing.expect(chunk.n_inst == 3);
     try std.testing.expect(chunk.n_inst == off);
 
-    _ = try chunk.pushImm(.{ .float = 23.3 });
+    _ = try chunk.pushConst(.{ .float = 23.3 });
 
     std.debug.print("\n", .{});
     chunk.disassemble();

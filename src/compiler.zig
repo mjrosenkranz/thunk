@@ -89,12 +89,12 @@ pub const Compiler = struct {
                 // TODO: lambda def list
                 // next must be symbol
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
-                // record symbol in imm
+                // record symbol in const
 
                 // TODO: intern the strings!
                 const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
 
-                const str_idx = try self.chunk.pushImmStr(str);
+                const str_idx = try self.chunk.pushConstStr(str);
                 // get reg from following expr
                 _ = try self.chunk.pushInst(Inst.init(
                     .define_global,
@@ -119,7 +119,7 @@ pub const Compiler = struct {
                 const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
 
                 // TODO: intern the strings!
-                const str_idx = try self.chunk.pushImmStr(str);
+                const str_idx = try self.chunk.pushConstStr(str);
                 _ = try self.chunk.pushInst(Inst.init(
                     .set_global,
                     .{
@@ -147,7 +147,7 @@ pub const Compiler = struct {
             },
             .@"true" => {
                 try self.parser.consume(.@"true", error.ExpectedTrue);
-                const idx = try self.chunk.pushImm(.{ .boolean = true });
+                const idx = try self.chunk.pushConst(.{ .boolean = true });
                 // allocate registor for the number
                 reg = try self.allocReg();
 
@@ -161,7 +161,7 @@ pub const Compiler = struct {
             },
             .@"false" => {
                 try self.parser.consume(.@"false", error.ExpectedFalse);
-                const idx = try self.chunk.pushImm(.{ .boolean = false });
+                const idx = try self.chunk.pushConst(.{ .boolean = false });
                 // allocate registor for the number
                 reg = try self.allocReg();
 
@@ -175,7 +175,7 @@ pub const Compiler = struct {
             },
             .number => {
                 try self.parser.consume(.number, error.ExpectedNumber);
-                const idx = try self.chunk.pushImm(try self.parser.float());
+                const idx = try self.chunk.pushConst(try self.parser.float());
                 // allocate registor for the number
                 reg = try self.allocReg();
 
@@ -247,7 +247,7 @@ pub const Compiler = struct {
             // TODO: these should be builtin proceedures
             .plus => {
                 // TODO: should be able to safely discard all registers here
-                // since this expression is immediate
+                // since this expression is constediate
                 self.parser.advance();
                 reg = try self.binop(.add);
             },
@@ -384,7 +384,7 @@ test "compile number literal" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 125.02), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 125.02), chunk.consts[0].float, eps);
 }
 
 test "parse symbol" {
@@ -409,7 +409,7 @@ test "simple expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.consts[0].float, eps);
 }
 
 test "no closing" {
@@ -480,8 +480,8 @@ test "plus expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -500,8 +500,8 @@ test "minus expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -520,8 +520,8 @@ test "mul expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -540,8 +540,8 @@ test "div expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -560,8 +560,8 @@ test "bool expression" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expect(false == chunk.imms[0].boolean);
-    try testing.expect(true == chunk.imms[1].boolean);
+    try testing.expect(false == chunk.consts[0].boolean);
+    try testing.expect(true == chunk.consts[1].boolean);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -582,8 +582,8 @@ test "define var" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectEqualSlices(u8, chunk.imms[0].string.slice(), "foo");
-    try testing.expect(chunk.imms[1].float == 13);
+    try testing.expectEqualSlices(u8, chunk.consts[0].string.slice(), "foo");
+    try testing.expect(chunk.consts[1].float == 13);
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 1 }),
         Inst.init(.define_global, .{ .u = 0, .r = 1 }),
@@ -605,10 +605,10 @@ test "define var" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expectEqualSlices(u8, chunk.imms[0].string.slice(), "foo");
-    try testing.expect(chunk.imms[1].float == 13);
-    try testing.expectEqualSlices(u8, chunk.imms[2].string.slice(), "foo");
-    try testing.expect(chunk.imms[3].float == 43);
+    try testing.expectEqualSlices(u8, chunk.consts[0].string.slice(), "foo");
+    try testing.expect(chunk.consts[1].float == 13);
+    try testing.expectEqualSlices(u8, chunk.consts[2].string.slice(), "foo");
+    try testing.expect(chunk.consts[3].float == 43);
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 1 }),
         Inst.init(.define_global, .{ .u = 0, .r = 1 }),
@@ -629,9 +629,9 @@ test "if statement" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expect(true == chunk.imms[0].boolean);
-    try testing.expect(12 == chunk.imms[1].float);
-    try testing.expect(-3 == chunk.imms[2].float);
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(12 == chunk.consts[1].float);
+    try testing.expect(-3 == chunk.consts[2].float);
 
     try testing.expectEqualSlices(Inst, &.{
         // load the test
@@ -666,8 +666,8 @@ test "if statement no else" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expect(true == chunk.imms[0].boolean);
-    try testing.expect(12 == chunk.imms[1].float);
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(12 == chunk.consts[1].float);
 
     try testing.expectEqualSlices(Inst, &.{
         // load the test

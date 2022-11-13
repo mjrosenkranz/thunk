@@ -62,7 +62,7 @@ pub const Vm = struct {
             // nothing to do with a load for now so we can just print it
             .load => {
                 const args = inst.argu();
-                self.regs[args.r] = chunk.imms[args.u];
+                self.regs[args.r] = chunk.consts[args.u];
             },
             .move => {
                 const args = inst.arg3();
@@ -72,46 +72,46 @@ pub const Vm = struct {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].add(self.regs[args.r2]);
             },
-            .addimm => {
+            .addconst => {
                 const args = inst.argu();
-                self.regs[args.r] = try self.regs[args.r].add(chunk.imms[args.u]);
+                self.regs[args.r] = try self.regs[args.r].add(chunk.consts[args.u]);
             },
             .sub => {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].sub(self.regs[args.r2]);
             },
-            .subimm => {
+            .subconst => {
                 const args = inst.argu();
-                self.regs[args.r] = try self.regs[args.r].sub(chunk.imms[args.u]);
+                self.regs[args.r] = try self.regs[args.r].sub(chunk.consts[args.u]);
             },
             .mul => {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].mul(self.regs[args.r2]);
             },
-            .mulimm => {
+            .mulconst => {
                 const args = inst.argu();
-                self.regs[args.r] = try self.regs[args.r].mul(chunk.imms[args.u]);
+                self.regs[args.r] = try self.regs[args.r].mul(chunk.consts[args.u]);
             },
             .div => {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].div(self.regs[args.r2]);
             },
-            .divimm => {
+            .divconst => {
                 const args = inst.argu();
-                self.regs[args.r] = try self.regs[args.r].div(chunk.imms[args.u]);
+                self.regs[args.r] = try self.regs[args.r].div(chunk.consts[args.u]);
             },
             .define_global => {
                 const args = inst.argu();
-                const imm = chunk.imms[args.u];
-                try Value.assertType(.string, imm);
-                const str = imm.string;
+                const val = chunk.consts[args.u];
+                try Value.assertType(.string, val);
+                const str = val.string;
                 try self.env.map.put(str.slice(), self.regs[args.r]);
             },
             .set_global => {
                 const args = inst.argu();
-                const imm = chunk.imms[args.u];
-                try Value.assertType(.string, imm);
-                try self.env.map.put(imm.string.slice(), self.regs[args.r]);
+                const val = chunk.consts[args.u];
+                try Value.assertType(.string, val);
+                try self.env.map.put(val.string.slice(), self.regs[args.r]);
             },
             .eq_true => {
                 const args = inst.arg3();
@@ -187,7 +187,7 @@ test "load a value" {
 
     var chunk = Chunk{};
     // load first constant into register 2
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = 2, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = 2, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // return nada
     _ = try chunk.pushInst(Inst.init(.ret, .{}));
 
@@ -207,9 +207,9 @@ test "load some values and add them" {
 
     var chunk = Chunk{};
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // load a constant into c
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushImm(.{ .float = 2 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushConst(.{ .float = 2 }) }));
     // a = b + c
     _ = try chunk.pushInst(Inst.init(.add, .{ .r = a, .r1 = b, .r2 = c }));
     // return nada
@@ -232,9 +232,9 @@ test "add and store in same register" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushImm(.{ .float = 7 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // a = b + a
     _ = try chunk.pushInst(Inst.init(.add, .{ .r = a, .r1 = a, .r2 = b }));
     // return nada
@@ -246,7 +246,7 @@ test "add and store in same register" {
     try testing.expectApproxEqAbs(@as(f32, 3.0), vm.regs[b].float, eps);
 }
 
-test "add immediate" {
+test "add constediate" {
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
@@ -255,9 +255,9 @@ test "add immediate" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushImm(.{ .float = 7 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.addimm, .{ .r = a, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.addconst, .{ .r = a, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // return nada
     _ = try chunk.pushInst(Inst.init(.ret, .{}));
 
@@ -278,12 +278,12 @@ test "subtract" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushImm(.{ .float = 7 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.subimm, .{ .r = a, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.subconst, .{ .r = a, .u = try chunk.pushConst(.{ .float = 3 }) }));
 
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushImm(.{ .float = 4 }) }));
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushImm(.{ .float = 6 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = 4 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushConst(.{ .float = 6 }) }));
     _ = try chunk.pushInst(Inst.init(.sub, .{ .r = d, .r1 = b, .r2 = c }));
 
     // return nada
@@ -309,12 +309,12 @@ test "multiply" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushImm(.{ .float = 7 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.mulimm, .{ .r = a, .u = try chunk.pushImm(.{ .float = 3 }) }));
+    _ = try chunk.pushInst(Inst.init(.mulconst, .{ .r = a, .u = try chunk.pushConst(.{ .float = 3 }) }));
 
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushImm(.{ .float = -4 }) }));
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushImm(.{ .float = 6 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = -4 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushConst(.{ .float = 6 }) }));
     _ = try chunk.pushInst(Inst.init(.mul, .{ .r = d, .r1 = b, .r2 = c }));
 
     // return nada
@@ -340,12 +340,12 @@ test "divide" {
 
     var chunk = Chunk{};
     // load a constant into a
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushImm(.{ .float = 8 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 8 }) }));
     // load a constant into b
-    _ = try chunk.pushInst(Inst.init(.divimm, .{ .r = a, .u = try chunk.pushImm(.{ .float = 4 }) }));
+    _ = try chunk.pushInst(Inst.init(.divconst, .{ .r = a, .u = try chunk.pushConst(.{ .float = 4 }) }));
 
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushImm(.{ .float = 6 }) }));
-    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushImm(.{ .float = -4 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = 6 }) }));
+    _ = try chunk.pushInst(Inst.init(.load, .{ .r = c, .u = try chunk.pushConst(.{ .float = -4 }) }));
     _ = try chunk.pushInst(Inst.init(.div, .{ .r = d, .r1 = b, .r2 = c }));
 
     // return nada
@@ -369,8 +369,8 @@ test "addition full pipeline" {
     var chunk = Chunk{};
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk, &vm.env);
-    try testing.expectApproxEqAbs(@as(f32, 125), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.imms[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 125), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -395,9 +395,9 @@ test "nested math full pipeline" {
     var chunk = Chunk{};
     var compiler = Compiler{};
     _ = try compiler.compile(code, &chunk, &vm.env);
-    try testing.expectApproxEqAbs(@as(f32, 3), chunk.imms[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 4), chunk.imms[1].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 5), chunk.imms[2].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 4), chunk.consts[1].float, eps);
+    try testing.expectApproxEqAbs(@as(f32, 5), chunk.consts[2].float, eps);
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -483,12 +483,12 @@ test "if statement" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expect(true == chunk.imms[0].boolean);
-    try testing.expect(12 == chunk.imms[1].float);
-    try testing.expect(-3 == chunk.imms[2].float);
-    try testing.expect(false == chunk.imms[3].boolean);
-    try testing.expect(12 == chunk.imms[4].float);
-    try testing.expect(-3 == chunk.imms[5].float);
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(12 == chunk.consts[1].float);
+    try testing.expect(-3 == chunk.consts[2].float);
+    try testing.expect(false == chunk.consts[3].boolean);
+    try testing.expect(12 == chunk.consts[4].float);
+    try testing.expect(-3 == chunk.consts[5].float);
 
     try vm.exec(&chunk);
 

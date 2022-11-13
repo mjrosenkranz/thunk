@@ -16,13 +16,13 @@ pub const Op = enum(OpSize) {
     eq_true,
     eq_false,
     add,
-    addimm,
+    addconst,
     mul,
-    mulimm,
+    mulconst,
     sub,
-    subimm,
+    subconst,
     div,
-    divimm,
+    divconst,
     define_global,
     set_global,
 };
@@ -92,7 +92,7 @@ pub const Inst = packed struct(InstSize) {
                 self.arg3().r2,
             }),
             .load => {
-                std.debug.print(offset_fmt ++ "load: imm[{}] into reg{}\n", .{
+                std.debug.print(offset_fmt ++ "load: const[{}] into reg{}\n", .{
                     offset,
                     self.argu().u,
                     self.argu().r,
@@ -113,8 +113,8 @@ pub const Inst = packed struct(InstSize) {
                     self.arg3().r2,
                 });
             },
-            .addimm => {
-                std.debug.print(offset_fmt ++ "addimm: reg[{}] = reg[{}] + imm[{}]\n", .{
+            .addconst => {
+                std.debug.print(offset_fmt ++ "addconst: reg[{}] = reg[{}] + const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -129,8 +129,8 @@ pub const Inst = packed struct(InstSize) {
                     self.arg3().r2,
                 });
             },
-            .subimm => {
-                std.debug.print(offset_fmt ++ "subimm: reg[{}] = reg[{}] + imm[{}]\n", .{
+            .subconst => {
+                std.debug.print(offset_fmt ++ "subconst: reg[{}] = reg[{}] + const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -145,8 +145,8 @@ pub const Inst = packed struct(InstSize) {
                     self.argu().u,
                 });
             },
-            .mulimm => {
-                std.debug.print(offset_fmt ++ "mulimm: reg[{}] = reg[{}] + imm[{}]\n", .{
+            .mulconst => {
+                std.debug.print(offset_fmt ++ "mulconst: reg[{}] = reg[{}] + const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -162,8 +162,8 @@ pub const Inst = packed struct(InstSize) {
                     self.argu().u,
                 });
             },
-            .divimm => {
-                std.debug.print(offset_fmt ++ "divimm: reg[{}] = reg[{}] + imm[{}]\n", .{
+            .divconst => {
+                std.debug.print(offset_fmt ++ "divconst: reg[{}] = reg[{}] + const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -171,14 +171,14 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .define_global => {
-                std.debug.print(offset_fmt ++ "define: <global imm[{}]> = reg[{}]\n", .{
+                std.debug.print(offset_fmt ++ "define: <global const[{}]> = reg[{}]\n", .{
                     offset,
                     self.argu().u,
                     self.argu().r,
                 });
             },
             .set_global => {
-                std.debug.print(offset_fmt ++ "set: <global imm[{}]> = reg[{}]\n", .{
+                std.debug.print(offset_fmt ++ "set: <global const[{}]> = reg[{}]\n", .{
                     offset,
                     self.argu().u,
                     self.argu().r,
@@ -209,30 +209,30 @@ pub const Inst = packed struct(InstSize) {
         return switch (op) {
             // returns values in the registers a to b
             .ret => Arg3,
-            // loads immediate value stored at u into register a
+            // loads constediate value stored at u into register a
             .load => ArgU,
             // moves the value from r1 into r
             .move => Arg3,
             // adds the values in the last two registers together and stores
             // the result in the first
             .add => Arg3,
-            // adds the immediate in s to a register and stores it in there
-            .addimm => ArgU,
+            // adds the constediate in s to a register and stores it in there
+            .addconst => ArgU,
             // multiplies the values in the last two registers together and stores
             // the result in the first
             .mul => Arg3,
-            // multiplies the immediate in s to a register and stores it in there
-            .mulimm => ArgU,
+            // multiplies the constediate in s to a register and stores it in there
+            .mulconst => ArgU,
             // subtracts the values in the last two registers together and stores
             // the result in the first
             .sub => Arg3,
-            // subtracts the immediate in s to a register and stores it in there
-            .subimm => ArgU,
+            // subtracts the constediate in s to a register and stores it in there
+            .subconst => ArgU,
             // divides the values in the last two registers together and stores
             // the result in the first
             .div => Arg3,
-            // divides the immediate in s to a register and stores it in there
-            .divimm => ArgU,
+            // divides the constediate in s to a register and stores it in there
+            .divconst => ArgU,
 
             // define a global variable where the symbol name is in u and value in r
             .define_global => ArgU,
