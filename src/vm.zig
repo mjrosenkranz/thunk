@@ -246,7 +246,7 @@ test "add and store in same register" {
     try testing.expectApproxEqAbs(@as(f32, 3.0), vm.regs[b].float, eps);
 }
 
-test "add constediate" {
+test "add const" {
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 

@@ -45,6 +45,7 @@ pub const Compiler = struct {
     /// global environment
     global_env: *Env = undefined,
 
+    /// "pop" the highest available register by increasing the reg count
     fn allocReg(self: *Self) !Reg {
         if (self.last_reg == 255) return CompileErrors.OutOfRegisters;
 
@@ -74,7 +75,7 @@ pub const Compiler = struct {
     }
 
     // TODO: this should be maybe register
-    fn statement(self: *Self) anyerror!Reg {
+    fn statement(self: *Self) anyerror!?Reg {
         if (self.parser.match(.lparen)) {
             self.parser.advance();
         } else {
@@ -133,7 +134,7 @@ pub const Compiler = struct {
 
         try self.parser.consume(.rparen, error.ExpectedClosingParen);
 
-        return 0;
+        return null;
     }
 
     /// parses/compiles an expression
@@ -284,28 +285,55 @@ pub const Compiler = struct {
     }
 
     fn binop(self: *Self, op: inst.Op) anyerror!Reg {
+        var ret: Reg = 0;
+        // no matter what, we want the first value in a register
         const r1 = try self.expr();
-        const r2 = try self.expr();
-        const reg = try self.allocReg();
+        // if the second  value is a const, we can save a register
+        //
+        var binop_inst: Inst = undefined;
+        if (self.parser.isConst()) {
 
-        try switch (op) {
-            .add,
-            .sub,
-            .mul,
-            .div,
-            => {
-                _ = try self.chunk.pushInst(.{
+            binop_inst =
+                try switch (op) {
+                .add,
+                .sub,
+                .mul,
+                .div,
+                => .{
+                    .op = .addconst,
+                    .data = @bitCast(inst.ArgSize, Arg3{
+                        .r = ret,
+                        .u = u,
+                    }),
+                },
+                else => return error.InvalidBinOpInst,
+            };
+            
+
+            self.parser.advance();
+        } else {
+            const r2 = try self.expr();
+            ret = try self.allocReg();
+            binop_inst =
+                try switch (op) {
+                .add,
+                .sub,
+                .mul,
+                .div,
+                => .{
                     .op = op,
                     .data = @bitCast(inst.ArgSize, Arg3{
-                        .r = reg,
+                        .r = ret,
                         .r1 = r1,
                         .r2 = r2,
                     }),
-                });
-                return reg;
-            },
-            else => return error.InvalidBinOpInst,
-        };
+                },
+                else => return error.InvalidBinOpInst,
+            };
+        }
+
+        _ = try self.chunk.pushInst(binop_inst);
+        return ret;
     }
 
     /// parses/compiles a non quoted list ()
@@ -358,6 +386,10 @@ pub const Parser = struct {
             return;
         }
         return err;
+    }
+
+    pub fn isConst(self: Self) bool {
+        return switch (self.curr.tag) {};
     }
 
     /// creates a float value from current state
@@ -485,8 +517,7 @@ test "plus expression" {
 
     try testing.expectEqualSlices(Inst, &.{
         Inst.init(.load, .{ .r = 1, .u = 0 }),
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
-        Inst.init(.add, .{ .r = 3, .r1 = 1, .r2 = 2 }),
+        Inst.init(.addconst, .{ .r = 1, .u = 1 }),
         Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
 }
@@ -683,6 +714,24 @@ test "if statement no else" {
         Inst.init(.move, .{ .r = 1, .r1 = 3 }),
         //-----------------------------
 
+        Inst.init(.ret, .{}),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "nested locals" {
+    const code =
+        "(+" ++ // result of this in reg 1
+        "  (+ 9 4)" ++ // <9> in reg 2 <4> in reg 3 sum in reg1
+        "  (/ 6 3))"; // <6> in reg 2 <4> in reg 3 sum in reg2
+    var chunk = Chunk{};
+    var compiler = Compiler{};
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    _ = try compiler.compile(code, &chunk, &env);
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(12 == chunk.consts[1].float);
+
+    try testing.expectEqualSlices(Inst, &.{
         Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
 }
