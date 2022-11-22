@@ -4,6 +4,8 @@ const Chunk = @import("chunk.zig").Chunk;
 const inst = @import("inst.zig");
 const Inst = inst.Inst;
 const Arg3 = inst.Arg3;
+const ArgSize = inst.ArgSize;
+const ArgU = inst.ArgU;
 const Reg = inst.Reg;
 const Value = @import("value.zig").Value;
 const String = @import("value.zig").String;
@@ -129,7 +131,7 @@ pub const Compiler = struct {
                     },
                 ));
             },
-            else => return self.list(),
+            else => return try self.list(),
         }
 
         try self.parser.consume(.rparen, error.ExpectedClosingParen);
@@ -291,31 +293,46 @@ pub const Compiler = struct {
         // if the second  value is a const, we can save a register
         //
         var binop_inst: Inst = undefined;
-        if (self.parser.isConst()) {
-
-            binop_inst =
-                try switch (op) {
-                .add,
-                .sub,
-                .mul,
-                .div,
-                => .{
+        if (try self.parser.parseConst()) |v| {
+            const k = try self.chunk.pushConst(v);
+            // get the index into the const array that this lives in
+            binop_inst = switch (op) {
+                .add => .{
                     .op = .addconst,
-                    .data = @bitCast(inst.ArgSize, Arg3{
+                    .data = @bitCast(ArgSize, ArgU{
                         .r = ret,
-                        .u = u,
+                        .u = k,
+                    }),
+                },
+                .sub => .{
+                    .op = .subconst,
+                    .data = @bitCast(ArgSize, ArgU{
+                        .r = ret,
+                        .u = k,
+                    }),
+                },
+                .div => .{
+                    .op = .divconst,
+                    .data = @bitCast(ArgSize, ArgU{
+                        .r = ret,
+                        .u = k,
+                    }),
+                },
+                .mul => .{
+                    .op = .mulconst,
+                    .data = @bitCast(ArgSize, ArgU{
+                        .r = ret,
+                        .u = k,
                     }),
                 },
                 else => return error.InvalidBinOpInst,
             };
-            
 
             self.parser.advance();
         } else {
             const r2 = try self.expr();
             ret = try self.allocReg();
-            binop_inst =
-                try switch (op) {
+            binop_inst = switch (op) {
                 .add,
                 .sub,
                 .mul,
@@ -388,8 +405,19 @@ pub const Parser = struct {
         return err;
     }
 
-    pub fn isConst(self: Self) bool {
-        return switch (self.curr.tag) {};
+    pub fn parseConst(self: *Self) !?Value {
+        return switch (self.curr.tag) {
+            .@"true" => {
+                return .{ .boolean = true };
+            },
+            .@"false" => {
+                return .{ .boolean = false };
+            },
+            .number => {
+                return try self.float();
+            },
+            else => null,
+        };
     }
 
     /// creates a float value from current state
@@ -721,14 +749,16 @@ test "if statement no else" {
 test "nested locals" {
     const code =
         "(+" ++ // result of this in reg 1
-        "  (+ 9 4)" ++ // <9> in reg 2 <4> in reg 3 sum in reg1
-        "  (/ 6 3))"; // <6> in reg 2 <4> in reg 3 sum in reg2
+        "  (+ 9 31)" ++ // <9> in reg 2 <4> in reg 3 sum in reg1
+        "  (/ 11 3))"; // <6> in reg 2 <4> in reg 3 sum in reg2
     var chunk = Chunk{};
     var compiler = Compiler{};
     var env = Env.init(testing.allocator);
     defer env.deinit();
     _ = try compiler.compile(code, &chunk, &env);
-    try testing.expect(true == chunk.consts[0].boolean);
+
+    chunk.disassemble();
+
     try testing.expect(12 == chunk.consts[1].float);
 
     try testing.expectEqualSlices(Inst, &.{
