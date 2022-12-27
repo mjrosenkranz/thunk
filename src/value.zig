@@ -113,7 +113,6 @@ test "assert" {
     // const v = Value{ .float = 123 };
     // try Value.assertType(.float, v);
     std.debug.print("{}\n", .{@sizeOf(Value)});
-    // TODO: pack these bih
     try std.testing.expect(@sizeOf(Value) == 16);
 }
 

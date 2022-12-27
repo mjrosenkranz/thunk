@@ -8,6 +8,7 @@ fn runRepl(allocator: std.mem.Allocator) !void {
 }
 
 fn runScript(path: []const u8) !void {
+    // read the file into code
     std.log.info("running script: {s}", .{path});
 }
 

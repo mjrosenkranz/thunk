@@ -1,9 +1,17 @@
 const std = @import("std");
 const testing = std.testing;
 
-pub const Loc = struct {
-    start: usize,
-    end: usize,
+/// location of the token in the source file
+/// this is useful for debugging and such
+pub const SrcLoc = struct {
+    // name of the file we are scanning
+    file: []const u8 = "unknown",
+    // the line number of this token
+    line: u32,
+    // the column number of this token
+    col: u32,
+    // slice of the source code that this token refers to
+    slice: []const u8 = "error",
 };
 
 pub const Tag = enum {
@@ -12,6 +20,7 @@ pub const Tag = enum {
     rparen,
 
     symbol,
+    keyword,
     number,
 
     // math symbols
@@ -60,7 +69,18 @@ pub const Tag = enum {
 /// Token type
 pub const Token = struct {
     tag: Tag,
-    loc: Loc,
+    loc: SrcLoc,
+
+    /// helper for debug printing a token
+    pub fn print(t: Token) void {
+        std.debug.print("<{s}:{d}:{}> {}: '{s}'\n", .{
+            t.loc.file,
+            t.loc.line,
+            t.loc.col,
+            t.tag,
+            t.loc.slice,
+        });
+    }
 };
 
 pub const Scanner = struct {
@@ -70,6 +90,7 @@ pub const Scanner = struct {
         start,
         number,
         symbol,
+        keyword,
         identifier,
         comment,
         // starts with a symbol that may be
@@ -84,7 +105,14 @@ pub const Scanner = struct {
     };
 
     /// where are we?
-    idx: usize = 0,
+    offset: usize = 0,
+    /// where this token started
+    start: usize = 0,
+
+    /// current line
+    line: u32 = 0,
+    /// current column
+    col: u32 = 0,
     /// buffer we are tokenizing
     buf: []const u8,
 
@@ -95,26 +123,36 @@ pub const Scanner = struct {
     }
 
     pub fn next(self: *Self) Token {
+        self.start = self.offset;
+
         var tok = Token{
             .tag = .eof,
             .loc = .{
-                .start = self.idx,
-                .end = 0,
+                .line = self.line,
+                .col = self.col,
             },
         };
 
-        if (self.idx >= self.buf.len)
+        if (self.offset >= self.buf.len)
             return tok;
 
         var state: State = .start;
         while (true) {
-            const c = self.buf[self.idx];
+            const c = self.buf[self.offset];
 
             switch (state) {
                 .start => {
                     // consume whitespace and reset
                     if (is_whitespace(c)) {
-                        tok.loc.start = self.idx + 1;
+                        self.start = self.offset + 1;
+                        self.col += 1;
+
+                        if (c == '\n') {
+                            self.line += 1;
+                            self.col = 0;
+                        }
+
+                        tok.loc.col = self.col;
                     } else if (is_digit(c)) {
                         state = .number;
                         tok.tag = .number;
@@ -143,6 +181,9 @@ pub const Scanner = struct {
                             },
                             ';' => {
                                 state = .comment;
+                            },
+                            ':' => {
+                                state = .keyword;
                             },
                             '+' => {
                                 state = .maybe_number;
@@ -217,7 +258,8 @@ pub const Scanner = struct {
                         if (c == '.') {
                             state = .period;
                         } else {
-                            self.idx -= 1;
+                            self.offset -= 1;
+                            // self.col -= 1;
                             break;
                         }
                     }
@@ -225,7 +267,8 @@ pub const Scanner = struct {
                 .identifier => {
                     if (self.maybe_identifier()) |id_tag| {
                         tok.tag = id_tag;
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
                         break;
                     } else {
                         state = .symbol;
@@ -234,7 +277,16 @@ pub const Scanner = struct {
                 .symbol => {
                     tok.tag = .symbol;
                     if (!is_symbol(c)) {
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
+                        break;
+                    }
+                },
+                .keyword => {
+                    tok.tag = .keyword;
+                    if (!is_symbol(c)) {
+                        self.offset -= 1;
+                        // self.col -= 1;
                         break;
                     }
                 },
@@ -242,7 +294,9 @@ pub const Scanner = struct {
                     // its a comment until a newline
                     switch (c) {
                         '\n' => {
-                            tok.loc.start = self.idx + 1;
+                            self.start = self.offset + 1;
+                            self.line += 1;
+                            self.col = 0;
                             state = .start;
                         },
                         else => {},
@@ -252,7 +306,8 @@ pub const Scanner = struct {
                     // if we hit a delimiter then this is
                     // an identifier
                     if (is_delim(c)) {
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
                         break;
                     }
 
@@ -269,7 +324,8 @@ pub const Scanner = struct {
                     // if we hit a delimiter then this is
                     // a period
                     if (is_delim(c)) {
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
                         tok.tag = .period;
                         break;
                     } else if (is_digit(c)) {
@@ -283,7 +339,8 @@ pub const Scanner = struct {
                 },
                 .greater => {
                     if (is_delim(c)) {
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
                         tok.tag = .gt;
                         break;
                     } else if (c == '=') {
@@ -297,7 +354,8 @@ pub const Scanner = struct {
                 },
                 .less => {
                     if (is_delim(c)) {
-                        self.idx -= 1;
+                        self.offset -= 1;
+                        // self.col -= 1;
                         tok.tag = .lt;
                         break;
                     } else if (c == '=') {
@@ -312,16 +370,17 @@ pub const Scanner = struct {
             }
 
             // nothing left, return
-            const new_idx = self.idx + 1;
+            const new_idx = self.offset + 1;
+            self.col += 1;
             if (new_idx == self.buf.len) {
                 break;
             } else {
-                self.idx = new_idx;
+                self.offset = new_idx;
             }
         }
 
-        self.idx += 1;
-        tok.loc.end = self.idx;
+        self.offset += 1;
+        tok.loc.slice = self.buf[self.start..self.offset];
 
         if (state == .comment) {
             tok.tag = .eof;
@@ -331,30 +390,30 @@ pub const Scanner = struct {
     }
 
     /// attempt to increasae index, returns false if cant
-    fn incIdx(self: *Self) ?u8 {
-        self.idx += 1;
-        if (self.idx == self.buf.len)
+    fn incOffset(self: *Self) ?u8 {
+        self.offset += 1;
+        if (self.offset == self.buf.len)
             return null;
 
-        return self.buf[self.idx];
+        return self.buf[self.offset];
     }
 
     /// attempt to compare if the buffer contains the rest of this value
     pub fn compareId(self: *Self, id: []const u8) bool {
         // cant fit in the rest of the buffer so cant match
-        if (self.idx + id.len > self.buf.len) return false;
+        if (self.offset + id.len > self.buf.len) return false;
         for (id) |item, index| {
-            if (self.buf[self.idx + index] != item) return false;
+            if (self.buf[self.offset + index] != item) return false;
         }
 
-        // if successful we increase the idx
-        self.idx += id.len;
+        // if successful we increase the offset
+        self.offset += id.len;
         return true;
     }
 
     /// figure out which identifier this is or just a symbol
     inline fn maybe_identifier(self: *Self) ?Tag {
-        switch (self.buf[self.idx]) {
+        switch (self.buf[self.offset]) {
             'a' => {
                 if (self.compareId("and")) {
                     return .@"and";
@@ -366,7 +425,7 @@ pub const Scanner = struct {
                 }
             },
             'c' => {
-                if (self.incIdx()) |c| {
+                if (self.incOffset()) |c| {
                     switch (c) {
                         'o' => {
                             if (self.compareId("ond")) {
@@ -389,10 +448,10 @@ pub const Scanner = struct {
             },
 
             'd' => {
-                if (self.incIdx()) |c| {
+                if (self.incOffset()) |c| {
                     switch (c) {
                         'o' => {
-                            self.idx += 1;
+                            self.offset += 1;
                             return .do;
                         },
                         'e' => {
@@ -405,7 +464,7 @@ pub const Scanner = struct {
                 }
             },
             'l' => {
-                if (self.incIdx()) |c| {
+                if (self.incOffset()) |c| {
                     switch (c) {
                         'a' => {
                             if (self.compareId("ambda")) {
@@ -414,7 +473,7 @@ pub const Scanner = struct {
                         },
                         'e' => {
                             if (self.compareId("et")) {
-                                const cc = self.buf[self.idx];
+                                const cc = self.buf[self.offset];
                                 if (is_symbol(cc)) {
                                     if (self.compareId("*")) {
                                         return .let_star;
@@ -526,13 +585,33 @@ pub fn testScanner(
     var scan = Scanner.init(src);
     for (strs) |str, i| {
         const t = scan.next();
-        // std.debug.print("{}: '{s}'\n", .{ t, scan.buf[t.loc.start..t.loc.end] });
         try testing.expect(std.mem.eql(
             u8,
-            scan.buf[t.loc.start..t.loc.end],
+            t.loc.slice,
             str,
         ));
         try testing.expect(t.tag == tags[i]);
+    }
+}
+
+pub fn testScannerTokens(
+    src: []const u8,
+    strs: []const []const u8,
+    toks: []const Token,
+) !void {
+    var scan = Scanner.init(src);
+    for (strs) |str, i| {
+        const t = scan.next();
+        try testing.expect(std.mem.eql(
+            u8,
+            t.loc.slice,
+            str,
+        ));
+        toks[i].print();
+        t.print();
+        try testing.expect(t.tag == toks[i].tag);
+        try testing.expect(t.loc.line == toks[i].loc.line);
+        try testing.expect(t.loc.col == toks[i].loc.col);
     }
 }
 
@@ -540,7 +619,6 @@ test "get next token" {
     const code =
         \\ (hello 123 world)
     ;
-
     const expected_str = [_][]const u8{
         "(",
         "hello",
@@ -548,15 +626,30 @@ test "get next token" {
         "world",
         ")",
     };
-    const expected_tag = [_]Tag{
-        .lparen,
-        .symbol,
-        .number,
-        .symbol,
-        .rparen,
+    const expected_tag = [_]Token{
+        .{
+            .tag = .lparen,
+            .loc = .{ .line = 0, .col = 1 },
+        },
+        .{
+            .tag = .symbol,
+            .loc = .{ .line = 0, .col = 2 },
+        },
+        .{
+            .tag = .number,
+            .loc = .{ .line = 0, .col = 8 },
+        },
+        .{
+            .tag = .symbol,
+            .loc = .{ .line = 0, .col = 12 },
+        },
+        .{
+            .tag = .rparen,
+            .loc = .{ .line = 0, .col = 17 },
+        },
     };
 
-    try testScanner(code, &expected_str, &expected_tag);
+    try testScannerTokens(code, &expected_str, &expected_tag);
 }
 
 test "valid symbol" {
@@ -566,6 +659,7 @@ test "valid symbol" {
         \\.symbol
         \\sym->bol
         \\sym!$%&*+-./:>=>?@^_~all
+        \\:keyword
     ;
 
     const expected_str = [_][]const u8{
@@ -574,6 +668,7 @@ test "valid symbol" {
         ".symbol",
         "sym->bol",
         "sym!$%&*+-./:>=>?@^_~all",
+        ":keyword",
     };
     const expected_tag = [_]Tag{
         .symbol,
@@ -581,6 +676,7 @@ test "valid symbol" {
         .symbol,
         .symbol,
         .symbol,
+        .keyword,
     };
 
     try testScanner(code, &expected_str, &expected_tag);

@@ -30,7 +30,6 @@ pub const Repl = struct {
         // local flags
         // turn off echo, get bytes one at a time, turn off signals (int and stp)
         // turn off ^V and ^O
-
         raw.lflag &= ~(@as(u16, sys.ECHO | sys.ICANON | sys.ISIG | sys.IEXTEN));
         // turn off software flow control (diables ^S and ^Q), and carriage returns
         raw.iflag &= ~(@as(u16, sys.IXON | sys.ICRNL | sys.BRKINT | sys.INPCK | sys.ISTRIP));

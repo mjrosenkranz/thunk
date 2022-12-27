@@ -92,7 +92,7 @@ pub const Compiler = struct {
                 // record symbol in const
 
                 // TODO: intern the strings!
-                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+                const str = self.parser.prev.loc.slice;
 
                 const str_idx = try self.chunk.pushConstStr(str);
                 // get reg from following expr
@@ -116,7 +116,7 @@ pub const Compiler = struct {
                 // next must be symbol
                 try self.parser.consume(.symbol, error.ExpectedSymbol);
 
-                const str = self.parser.scanner.buf[self.parser.prev.loc.start..self.parser.prev.loc.end];
+                const str = self.parser.prev.loc.slice;
 
                 // TODO: intern the strings!
                 const str_idx = try self.chunk.pushConstStr(str);
@@ -364,7 +364,7 @@ pub const Parser = struct {
     pub fn float(
         self: *Self,
     ) !Value {
-        const str = self.scanner.buf[self.prev.loc.start..self.prev.loc.end];
+        const str = self.prev.loc.slice;
         const f = std.fmt.parseFloat(f32, str) catch |err| {
             std.debug.print("not float: {s}\n", .{str});
             return err;
