@@ -1,5 +1,5 @@
 const std = @import("std");
-const Value = @import("value.zig").PackedValue;
+const Value = @import("value.zig").Value;
 const Allocator = std.mem.Allocator;
 const Scanner = @import("scanner.zig").Scanner;
 const Token = @import("token.zig");
@@ -9,9 +9,7 @@ pub const Ast = @This();
 
 const NodeList = std.ArrayList(Node);
 const TokenList = std.ArrayList(Token);
-/// extra data can be of any type but by making it NodeIdx
-/// we know that it is word aligned
-const NodeDataList = std.ArrayList(NodeIdx);
+const NodeDataList = std.ArrayListAligned(u8, 8);
 
 /// all the nodes in this tree
 nodes: NodeList,
@@ -29,6 +27,34 @@ pub fn init(allocator: Allocator) Ast {
         .data = NodeDataList.init(allocator),
     };
     return ast;
+}
+
+pub fn pushData(
+    ast: *Ast,
+    comptime T: type,
+    t: T,
+) !NodeIdx {
+    // allocate the required number of bytes
+    const idx = @intCast(NodeIdx, ast.data.items.len);
+    var size: u8 = @sizeOf(T);
+    const align_t = @alignOf(T);
+    while (size > 0) : (size -= 1) {
+        try ast.data.append(0xaa);
+    }
+
+    const ptr = @ptrCast([*]T, @alignCast(align_t, &ast.data.items[idx]));
+    ptr[0] = t;
+
+    return idx;
+}
+
+/// gets typed data from the tree
+pub fn getData(ast: *Ast, comptime T: type, idx: NodeIdx) T {
+    const align_t = @alignOf(T);
+    const ptr = @ptrCast([*]T, @alignCast(align_t, &ast.data.items[idx]));
+    var t: T = undefined;
+    t = ptr[0];
+    return t;
 }
 
 /// Parse the whole source into a tree
@@ -160,18 +186,21 @@ test "parse const" {
 
     try ast.parse(code);
     // root -> const
-    const expected = [_]Node{ .{
-        .tag = .root,
-        .token_idx = 0,
-        .children = .{ .l = 1 },
-    }, .{
-        .tag = .constant,
-        .token_idx = 0,
-        .children = .{},
-    } };
+    const expected = [_]Node{
+        .{
+            .tag = .root,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        .{
+            .tag = .constant,
+            .token_idx = 0,
+            .children = .{},
+        },
+    };
     try ast.testAst(&expected);
     // assert that we stored this bad boy correctly
-    try std.testing.expect(ast.getData(f32, ast.nodes.items[1].children.l) == 32.0);
+    try std.testing.expect(ast.getData(Value, ast.nodes.items[1].children.l).float == 32.0);
 }
 
 // test "parse plus" {}
