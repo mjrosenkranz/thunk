@@ -188,13 +188,10 @@ pub fn parseApply(
         .children = .{},
     };
 
-    // TODO: handle left is rparen
     // get the thing we are calling
-    {
-        const tok = scanner.next();
-        const left = try ast.parseExpr(tok, scanner);
-        apply_node.children.l = left;
-    }
+    const caller_tok = scanner.next();
+    const caller = try ast.parseExpr(caller_tok, scanner);
+    apply_node.children.l = caller;
 
     // we start making a list by creating the first pair
     // var last: ?NodeIdx = null;
@@ -203,7 +200,7 @@ pub fn parseApply(
     try ast.nodes.append(.{
         .tag = .pair,
         // TODO: patch token idx
-        .token_idx = 0,
+        .token_idx = ast.nodes.items[caller].token_idx,
         .children = .{},
     });
 
@@ -242,6 +239,7 @@ pub fn parseApply(
 
                 const n_idx = try ast.parseExpr(tok, scanner);
                 ast.nodes.items[pair_idx].children.l = n_idx;
+                ast.nodes.items[pair_idx].token_idx = ast.nodes.items[n_idx].token_idx;
                 n_args += 1;
             },
         }
@@ -325,6 +323,14 @@ fn testAst(ast: Ast, expected: []const Node) !void {
             });
             return err;
         };
+        std.testing.expectEqual(e.token_idx, n.token_idx) catch |err| {
+            std.debug.print("token_idx missmatch: node[{}] expected {}, got {}\n", .{
+                i,
+                e.token_idx,
+                n.token_idx,
+            });
+            return err;
+        };
     }
 }
 
@@ -381,9 +387,8 @@ test "apply no args" {
         // 2
         .{
             .tag = .symbol,
-            .children = .{},
             .token_idx = 1,
-            // .children = .{ .l = 0 },
+            .children = .{},
         },
         // 3
         .{
@@ -393,6 +398,16 @@ test "apply no args" {
         },
     };
     try ast.testAst(&expected);
+}
+
+test "apply no close" {
+    const code =
+        \\(+ 32 44
+    ;
+    var ast = Ast.init(std.testing.allocator);
+    defer ast.deinit();
+
+    try std.testing.expectError(ParseError.UnexpectedEof, ast.parse(code));
 }
 
 test "apply one arg" {
@@ -429,7 +444,7 @@ test "apply one arg" {
         // 3
         .{
             .tag = .pair,
-            .token_idx = 1,
+            .token_idx = 2,
             .children = .{ .l = 4 },
         },
         // 4
@@ -475,7 +490,7 @@ test "apply two args" {
         // 3
         .{
             .tag = .pair,
-            .token_idx = 1,
+            .token_idx = 2,
             .children = .{ .l = 4, .r = 5 },
         },
         // 4
@@ -566,7 +581,7 @@ test "apply many" {
         // 7
         .{
             .tag = .pair,
-            .token_idx = 3,
+            .token_idx = 4,
             .children = .{ .l = 8, .r = 0 },
         },
 
@@ -583,34 +598,95 @@ test "apply many" {
     try std.testing.expect(ast.getData(Value, ast.nodes.items[6].children.l).float == 25.0);
     try std.testing.expect(ast.getData(Value, ast.nodes.items[8].children.l).float == 44.0);
 }
-//
-//
-// test "parse nested" {
-//     const code =
-//         \\(* 3 (+ 4 5))
-//     ;
-//     _ = code;
-//     // root -> * -> 3
-//     //         |--> + -> 4
-//     //              |--> 5
-//     const expected = [_]Node{
-//         .{
-//             .tok = .{ .tag = .asterisk },
-//             .children = .{
-//                 .l = 1,
-//                 .r = 2,
-//             },
-//         },
-//         .{ .tok = .{ .tag = .number } },
-//         .{
-//             .tok = .{ .tag = .plus },
-//             .children = .{
-//                 .l = 3,
-//                 .r = 4,
-//             },
-//         },
-//         .{ .tok = .{ .tag = .number } },
-//         .{ .tok = .{ .tag = .number } },
-//     };
-//     _ = expected;
-// }
+
+test "apply nested" {
+    const code =
+        //01 2 34 5 6
+        \\(* 3 (+ 4 5))
+    ;
+    _ = code;
+    // 0       1        2
+    // root -> apply -> *
+    //         |    3 4
+    //         |--> [ 3 | . ]
+    //                    |     5       6
+    //                    |--> apply -> +
+    //                          |    7 8
+    //                          |--> [ 4 | . ]
+    //                                     |    9 10
+    //                                     |--> [ 5 |   ]
+    const expected = [_]Node{
+        .{
+            .tag = .root,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .apply,
+            .token_idx = 0,
+            .children = .{
+                .l = 2,
+                .r = 3,
+            },
+        },
+        // 2
+        .{
+            .tag = .symbol,
+            .children = .{},
+            .token_idx = 1,
+        },
+        // 3
+        .{
+            .tag = .pair,
+            .token_idx = 2,
+            .children = .{ .l = 4, .r = 5 },
+        },
+        // 4
+        .{
+            .tag = .constant,
+            .token_idx = 2,
+            .children = .{ .l = 0 * @sizeOf(Value) },
+        },
+        // 5
+        .{
+            .tag = .apply,
+            .token_idx = 3,
+            .children = .{
+                .l = 2,
+                .r = 3,
+            },
+        },
+        // 6
+        .{
+            .tag = .symbol,
+            .children = .{},
+            .token_idx = 4,
+        },
+        // 7
+        .{
+            .tag = .pair,
+            .token_idx = 5,
+            .children = .{ .l = 8, .r = 9 },
+        },
+        // 8
+        .{
+            .tag = .constant,
+            .token_idx = 5,
+            .children = .{ .l = 1 * @sizeOf(Value) },
+        },
+        // 9
+        .{
+            .tag = .pair,
+            .token_idx = 6,
+            .children = .{ .l = 10, .r = 0 },
+        },
+        // 10
+        .{
+            .tag = .constant,
+            .token_idx = 6,
+            .children = .{ .l = 2 * @sizeOf(Value) },
+        },
+    };
+    _ = expected;
+}
