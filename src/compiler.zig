@@ -9,8 +9,8 @@ const Value = @import("value.zig").Value;
 const String = @import("value.zig").String;
 const scan = @import("scanner.zig");
 const Scanner = scan.Scanner;
-const Tag = scan.Tag;
-const Token = scan.Token;
+const Token = @import("token.zig");
+const Tag = Token.Tag;
 const Loc = scan.Loc;
 const Env = @import("env.zig").Env;
 
