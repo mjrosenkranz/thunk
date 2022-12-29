@@ -106,6 +106,10 @@ pub fn parseExpr(self: *Parser, tok: Token, scanner: *Scanner) ParseError!NodeId
     if (tok.tag == .eof) return 0;
     return switch (tok.tag) {
         .number => try self.parseNum(tok),
+
+        .@"false",
+        .@"true",
+        => try self.parseBool(tok),
         // these are all builtin symbols
         .plus,
         .minus,
@@ -137,6 +141,28 @@ pub fn parseNum(
         return ParseError.SyntaxError;
     };
     const data_idx = try self.pushData(Value, .{ .float = f });
+
+    // push the token
+    const token_idx = @intCast(u32, self.tokens.items.len);
+    try self.tokens.append(tok);
+
+    const node_idx = @intCast(u32, self.nodes.items.len);
+    // parse the number into a value
+    // push the node
+    try self.nodes.append(.{
+        .tag = .constant,
+        .token_idx = token_idx,
+        .children = .{ .l = data_idx },
+    });
+    return node_idx;
+}
+
+pub fn parseBool(
+    self: *Parser,
+    tok: Token,
+) ParseError!NodeIdx {
+    var b: bool = tok.tag == .@"true";
+    const data_idx = try self.pushData(Value, .{ .boolean = b });
 
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
@@ -646,7 +672,7 @@ test "call nested" {
 test "call lambda" {
     const code =
         //01 2 3  4 5
-        \\((fn x) 32)
+        \\((fn #t) #f)
     ;
     var parser = Parser.init(std.testing.allocator);
     defer parser.deinit();
@@ -698,9 +724,9 @@ test "call lambda" {
         },
         // 5
         .{
-            .tag = .symbol,
+            .tag = .constant,
             .token_idx = 3,
-            .children = .{},
+            .children = .{ .l = 0 },
         },
         // 6
         .{
@@ -712,9 +738,11 @@ test "call lambda" {
         .{
             .tag = .constant,
             .token_idx = 4,
-            .children = .{ .l = 0 },
+            .children = .{ .l = 16 },
         },
     };
 
     try ast.testAst(&expected);
+    try std.testing.expect(ast.getData(Value, ast.nodes[5].children.l).boolean == true);
+    try std.testing.expect(ast.getData(Value, ast.nodes[7].children.l).boolean == false);
 }
