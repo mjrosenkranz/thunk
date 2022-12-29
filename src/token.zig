@@ -22,9 +22,14 @@ pub const Tag = enum {
     lparen,
     rparen,
 
+    // atoms
     symbol,
     keyword,
     number,
+    @"false",
+    @"true",
+
+    // --- builtin symbols ---
 
     // math symbols
     plus,
@@ -37,7 +42,12 @@ pub const Tag = enum {
     gte,
     lte,
 
-    period,
+    // boolean logic
+    @"and",
+    @"or",
+    @"not",
+
+    // ---------------------
 
     // quotes and stuff
     quote,
@@ -46,13 +56,9 @@ pub const Tag = enum {
     comma,
     backslash,
     sharp,
+    period,
 
-    // keywords
-    // derived expresions
-    @"false",
-    @"true",
-    @"and",
-    @"or",
+    // --- special forms ---
     begin,
     case,
     cond,
@@ -64,6 +70,7 @@ pub const Tag = enum {
     let_star,
     letrec,
     set,
+    // ---------------------
 
     unknown,
     eof,

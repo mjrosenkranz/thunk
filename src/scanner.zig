@@ -410,6 +410,11 @@ pub const Scanner = struct {
                     }
                 }
             },
+            'n' => {
+                if (self.compareId("not")) {
+                    return .@"not";
+                }
+            },
             'o' => {
                 if (self.compareId("or")) {
                     return .@"or";
@@ -853,6 +858,25 @@ test "greater than and less than" {
         .lte,
         .symbol,
         .gt,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "boolean logic" {
+    const code =
+        \\and not or
+    ;
+
+    const expected_str = [_][]const u8{
+        "and",
+        "not",
+        "or",
+    };
+    const expected_tag = [_]Tag{
+        .@"and",
+        .@"not",
+        .@"or",
     };
 
     try testScanner(code, &expected_str, &expected_tag);
