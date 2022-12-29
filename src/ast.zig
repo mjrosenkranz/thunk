@@ -65,10 +65,10 @@ pub const Node = struct {
         /// name in the data list
         symbol,
         /// the application of a procedure with params
-        /// l points to the symbol we are applying
+        /// l points to the symbol we are calling
         /// r points to the first argument
         /// if r is 0 then there are no arguments
-        apply,
+        call,
         /// basically a linked list
         /// l is the value at this point in the list
         /// r is the next item in the list
@@ -80,6 +80,7 @@ pub const Node = struct {
 pub fn testAst(ast: Ast, expected: []const Node) !void {
     if (ast.nodes.len != expected.len) {
         std.debug.print("expected {} nodes, got {}\n", .{ expected.len, ast.nodes.len });
+        try std.testing.expect(false);
     }
 
     // start with the first node since 0 is always root
@@ -103,12 +104,27 @@ pub fn testAst(ast: Ast, expected: []const Node) !void {
             return err;
         };
         std.testing.expectEqual(e.token_idx, n.token_idx) catch |err| {
+            // std.debug.print("token_idx missmatch: node[{}] expected [{}]{}, got [{}]{}\n", .{
             std.debug.print("token_idx missmatch: node[{}] expected {}, got {}\n", .{
                 i,
                 e.token_idx,
+                // ast.tokens[e.token_idx].tag,
                 n.token_idx,
+                // ast.tokens[n.token_idx].tag,
             });
             return err;
         };
+    }
+}
+
+pub fn print(ast: Ast) void {
+    std.debug.print("tree:\n", .{});
+    for (ast.nodes) |n, i| {
+        std.debug.print("{} {}[l: {} r: {}]\n", .{
+            i,
+            n.tag,
+            n.children.l,
+            n.children.r,
+        });
     }
 }
