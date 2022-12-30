@@ -214,10 +214,48 @@ pub fn parseForm(
 
     const tok = self.scanner.next();
     return switch (tok.tag) {
+        .@"if" => try self.parseCond(tok),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => try self.parseCall(tok),
     };
+}
+
+/// parse a conditional statement
+/// for now, this is just an if statement
+pub fn parseCond(
+    self: *Parser,
+    if_tok: Token,
+) ParseError!NodeIdx {
+
+    // save this for later when we have to patch the then and else branches
+    const if_idx = @intCast(NodeIdx, self.nodes.items.len);
+    // push the if statement to the tree
+    try self.nodes.append(.{
+        .tag = .@"if",
+        .children = .{},
+        // INVARIANT: the latest token should be the lparen
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    try self.tokens.append(if_tok);
+
+    // parse the cond expression
+    _ = try self.parseExpr(self.scanner.next());
+
+    const then_idx = try self.parseExpr(self.scanner.next());
+    const else_idx = blk: {
+        const else_tok = self.scanner.next();
+        if (else_tok.tag == .rparen) {
+            break :blk 0;
+        } else {
+            break :blk try self.parseExpr(else_tok);
+        }
+    };
+
+    self.nodes.items[if_idx].children.l = then_idx;
+    self.nodes.items[if_idx].children.r = else_idx;
+
+    return if_idx;
 }
 
 pub fn parseCall(

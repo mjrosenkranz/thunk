@@ -57,7 +57,7 @@ pub const Node = struct {
         /// the root of the tree
         root,
         /// a constant value like a number or interned string
-        /// the left child is the index of the start of the constant's
+        /// the left child is the byte offset of the constant's
         /// value in the data list
         constant,
         /// a symbol which may be bound to a value
@@ -74,6 +74,11 @@ pub const Node = struct {
         /// r is the next item in the list
         /// if r is zero wer're at the end of the list
         pair,
+        /// an if statement
+        /// ASSUMTION: the condition is the next node in the tree list
+        /// l is the then branch
+        /// r is the else branch
+        @"if",
     };
 };
 
@@ -126,5 +131,13 @@ pub fn print(ast: Ast) void {
             n.children.l,
             n.children.r,
         });
+    }
+}
+
+pub fn printTokens(ast: Ast) void {
+    std.debug.print("tokens:\n", .{});
+    for (ast.tokens) |t, i| {
+        std.debug.print("[{}]: ", .{i});
+        t.print();
     }
 }

@@ -5,7 +5,7 @@ const Ast = @import("ast.zig");
 const NodeIdx = Ast.NodeIdx;
 const Node = Ast.Node;
 
-test "parse const" {
+test "const" {
     const code =
         \\32
     ;
@@ -30,6 +30,141 @@ test "parse const" {
     try ast.testAst(&expected);
     // assert that we stored this bad boy correctly
     try std.testing.expect(ast.getData(Value, ast.nodes[1].children.l).float == 32.0);
+}
+
+test "if" {
+    const code =
+        //0 1 23 4 5   6   7
+        \\(if (> 2 3) thn els)
+    ;
+    // 0        1     8   2       3
+    // root -> if -> thn  call -> >
+    //          |           |    4 5
+    //          |           |--> [ 2 | . ]
+    //          |                      |   6 7
+    //          |     9                |-> [ 3 | _ ]
+    //          |--> els
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    // root -> const
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .root,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .@"if",
+            .token_idx = 1,
+            .children = .{ .l = 8, .r = 9 },
+        },
+        // 2
+        .{
+            .tag = .call,
+            .token_idx = 2,
+            .children = .{ .l = 3, .r = 4 },
+        },
+        // 3
+        .{
+            // >
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+        // 4
+        .{
+            .tag = .pair,
+            .token_idx = 4,
+            .children = .{ .l = 5, .r = 6 },
+        },
+        // 5
+        .{
+            // 2
+            .tag = .constant,
+            .token_idx = 4,
+            .children = .{ .l = 0 * @sizeOf(Value) },
+        },
+        // 6
+        .{
+            .tag = .pair,
+            .token_idx = 5,
+            .children = .{ .l = 7 },
+        },
+        // 7
+        .{
+            // 3
+            .tag = .constant,
+            .token_idx = 5,
+            .children = .{ .l = 1 * @sizeOf(Value) },
+        },
+        // 8
+        .{
+            // thn
+            .tag = .symbol,
+            .token_idx = 6,
+            .children = .{},
+        },
+        // 9
+        .{
+            // els
+            .tag = .symbol,
+            .token_idx = 7,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
+    // assert that we stored this bad boy correctly
+    try std.testing.expect(ast.getData(Value, ast.nodes[5].children.l).float == 2.0);
+    try std.testing.expect(ast.getData(Value, ast.nodes[7].children.l).float == 3.0);
+}
+
+test "if no else" {
+    const code =
+        //0 1 2  3
+        \\(if x thn)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    // 0        1     3  2
+    // root -> if -> thn x
+    //          |     4
+    //          |--> void
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .root,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .@"if",
+            .token_idx = 1,
+            .children = .{ .l = 3, .r = 0 },
+        },
+        // 2
+        .{
+            .tag = .symbol,
+            .token_idx = 2,
+            .children = .{},
+        },
+        // 3
+        .{
+            // thn
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
 }
 
 test "call no args" {
