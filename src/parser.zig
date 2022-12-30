@@ -26,12 +26,16 @@ data: NodeDataList,
 /// for allocating
 allocator: Allocator,
 
+/// scanner for getting source code
+scanner: Scanner,
+
 pub fn init(allocator: Allocator) Parser {
     return Parser{
         .allocator = allocator,
         .tokens = TokenList.init(allocator),
         .nodes = NodeList.init(allocator),
         .data = NodeDataList.init(allocator),
+        .scanner = undefined,
     };
 }
 
@@ -82,10 +86,10 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
 
     // TODO: ensure capacity so that we dont need try everywhere
     // create a scanner
-    var scanner = Scanner.init(src);
-    const first_tok = scanner.next();
+    self.scanner = Scanner.init(src);
+    const first_tok = self.scanner.next();
 
-    const id = try self.parseExpr(first_tok, &scanner);
+    const id = try self.parseExpr(first_tok);
     // modify the root to use the new found child
     self.nodes.items[0].children = .{
         .l = id,
@@ -101,7 +105,7 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
 /// this is the first stop in our parsing journey.
 /// here we parse the top level statements.
 /// This should be just one when we are just inside a single sexpr
-pub fn parseExpr(self: *Parser, tok: Token, scanner: *Scanner) ParseError!NodeIdx {
+pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
     // we done!
     if (tok.tag == .eof) return 0;
     return switch (tok.tag) {
@@ -122,7 +126,7 @@ pub fn parseExpr(self: *Parser, tok: Token, scanner: *Scanner) ParseError!NodeId
         .lte,
         .symbol,
         => try self.parseSymbol(tok),
-        .lparen => try self.parseForm(tok, scanner),
+        .lparen => try self.parseForm(tok),
         .rparen => ParseError.UndexpectedRightParen,
         else => {
             std.debug.print("UnexpectedTag: {}\n", .{tok.tag});
@@ -204,23 +208,21 @@ pub fn parseSymbol(
 pub fn parseForm(
     self: *Parser,
     paren_tok: Token,
-    scanner: *Scanner,
 ) ParseError!NodeIdx {
     // push the lparen token
     try self.tokens.append(paren_tok);
 
-    const tok = scanner.next();
+    const tok = self.scanner.next();
     return switch (tok.tag) {
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
-        else => try self.parseCall(tok, scanner),
+        else => try self.parseCall(tok),
     };
 }
 
 pub fn parseCall(
     self: *Parser,
     caller_tok: Token,
-    scanner: *Scanner,
 ) ParseError!NodeIdx {
     // create call node
     const call_idx = @intCast(NodeIdx, self.nodes.items.len);
@@ -233,7 +235,7 @@ pub fn parseCall(
     });
 
     // get the thing we are calling
-    const caller = try self.parseExpr(caller_tok, scanner);
+    const caller = try self.parseExpr(caller_tok);
     self.nodes.items[call_idx].children.l = caller;
     // self.nodes.items[call_idx].token_idx = self.nodes.items[caller].token_idx;
 
@@ -250,7 +252,7 @@ pub fn parseCall(
     var n_args: u8 = 0;
 
     while (true) {
-        const tok = scanner.next();
+        const tok = self.scanner.next();
 
         // TODO: handle if the symbol makes this a special form
         switch (tok.tag) {
@@ -280,7 +282,7 @@ pub fn parseCall(
                     }
                 }
 
-                const n_idx = try self.parseExpr(tok, scanner);
+                const n_idx = try self.parseExpr(tok);
                 self.nodes.items[pair_idx].children.l = n_idx;
                 self.nodes.items[pair_idx].token_idx = self.nodes.items[n_idx].token_idx;
                 n_args += 1;
