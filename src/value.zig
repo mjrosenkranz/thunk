@@ -51,6 +51,13 @@ pub const Value = union(ValueType) {
     /// string of characters
     string: *String,
 
+    pub fn print(v: Value) void {
+        switch (v) {
+            .float => |f| std.debug.print("{d:.2}", .{f}),
+            inline else => |inner| std.debug.print("{}", .{inner}),
+        }
+    }
+
     pub inline fn truthy(v: Value) bool {
         return switch (v) {
             .boolean => |b| b,

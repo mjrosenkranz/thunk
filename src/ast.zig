@@ -25,7 +25,7 @@ pub fn deinit(ast: *Ast, allocator: Allocator) void {
 }
 
 /// gets typed data from the tree
-pub fn getData(ast: *Ast, comptime T: type, idx: NodeIdx) T {
+pub fn getData(ast: Ast, comptime T: type, idx: NodeIdx) T {
     const align_t = @alignOf(T);
     const ptr = @ptrCast([*]T, @alignCast(align_t, &ast.data[idx]));
     var t: T = undefined;
@@ -80,6 +80,56 @@ pub const Node = struct {
         /// r is the else branch
         @"if",
     };
+
+    pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
+        switch (n.tag) {
+            .root => {
+                std.debug.print("<ast: \n", .{});
+                ast.nodes[n.children.l].pprint(n.children.l, ast);
+                std.debug.print("\n>\n", .{});
+            },
+            .constant => {
+                // TODO: the alignment of the value may be wrong,
+                // so get the offset first
+                const off = n.children.l;
+                std.debug.print("(const ", .{});
+                ast.getData(Value, off).print();
+                std.debug.print(")", .{});
+            },
+            .symbol => {
+                std.debug.print("(symbol {s})", .{ast.tokens[n.token_idx].loc.slice});
+            },
+            .@"if" => {
+                std.debug.print("(if ", .{});
+                // cond
+                ast.nodes[i + 1].pprint(i + 1, ast);
+                std.debug.print("\n    ", .{});
+                // then
+                ast.nodes[n.children.l].pprint(n.children.l, ast);
+                std.debug.print("\n    ", .{});
+                // else
+                ast.nodes[n.children.r].pprint(n.children.r, ast);
+                // TODO: cond and stuff
+                std.debug.print(")", .{});
+            },
+            .call => {
+                std.debug.print("(call ", .{});
+                ast.nodes[n.children.l].pprint(n.children.l, ast);
+                std.debug.print(" ", .{});
+                ast.nodes[n.children.r].pprint(n.children.r, ast);
+                std.debug.print(")", .{});
+            },
+            .pair => {
+                if (n.children.l != 0) {
+                    ast.nodes[n.children.l].pprint(n.children.l, ast);
+                }
+                if (n.children.r != 0) {
+                    std.debug.print(" ", .{});
+                    ast.nodes[n.children.r].pprint(n.children.r, ast);
+                }
+            },
+        }
+    }
 };
 
 pub fn testAst(ast: Ast, expected: []const Node) !void {
@@ -132,6 +182,11 @@ pub fn print(ast: Ast) void {
             n.children.r,
         });
     }
+}
+
+pub fn pprint(ast: Ast) void {
+    std.debug.print("tree:\n", .{});
+    ast.nodes[0].pprint(@intCast(NodeIdx, 0), &ast);
 }
 
 pub fn printTokens(ast: Ast) void {
