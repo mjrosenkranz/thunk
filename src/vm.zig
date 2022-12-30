@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const Chunk = @import("chunk.zig").Chunk;
-const Compiler = @import("compiler.zig").Compiler;
+const compiler = @import("compiler.zig");
 const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
 const String = @import("value.zig").String;
@@ -366,9 +366,7 @@ test "addition full pipeline" {
     const code =
         \\(+ 125 13)
     ;
-    var chunk = Chunk{};
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk, &vm.env);
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
     try testing.expectApproxEqAbs(@as(f32, 125), chunk.consts[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
 
@@ -392,9 +390,7 @@ test "nested math full pipeline" {
     const code =
         \\(* 3 (+ 4 5))
     ;
-    var chunk = Chunk{};
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk, &vm.env);
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
     try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 4), chunk.consts[1].float, eps);
     try testing.expectApproxEqAbs(@as(f32, 5), chunk.consts[2].float, eps);
@@ -437,10 +433,8 @@ test "define var" {
 
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
-    var chunk = Chunk.init(testing.allocator);
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
     defer chunk.deinit();
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk, &vm.env);
 
     try vm.exec(&chunk);
 
@@ -456,10 +450,8 @@ test "set var" {
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
-    var chunk = Chunk.init(testing.allocator);
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
     defer chunk.deinit();
-    var compiler = Compiler{};
-    _ = try compiler.compile(code, &chunk, &vm.env);
 
     try vm.step(&chunk);
     try vm.step(&chunk);
@@ -478,11 +470,9 @@ test "if statement" {
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
 
-    var chunk = Chunk{};
-    var compiler = Compiler{};
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
     var env = Env.init(testing.allocator);
     defer env.deinit();
-    _ = try compiler.compile(code, &chunk, &env);
     try testing.expect(true == chunk.consts[0].boolean);
     try testing.expect(12 == chunk.consts[1].float);
     try testing.expect(-3 == chunk.consts[2].float);

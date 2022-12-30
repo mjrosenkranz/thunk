@@ -36,12 +36,6 @@ pub const Scanner = struct {
     /// buffer we are tokenizing
     buf: []const u8,
 
-    pub fn init(buffer: []const u8) Self {
-        return Self{
-            .buf = buffer,
-        };
-    }
-
     pub fn next(self: *Self) Token {
         self.start = self.offset;
 
@@ -493,21 +487,14 @@ pub const Scanner = struct {
     }
 };
 
-test "init" {
-    const code =
-        \\ (hello world)
-    ;
-
-    var scan = Scanner.init(code);
-    _ = scan;
-}
-
 pub fn testScanner(
     src: []const u8,
     strs: []const []const u8,
     tags: []const Tag,
 ) !void {
-    var scan = Scanner.init(src);
+    var scan = Scanner{
+        .buf = src,
+    };
     for (strs) |str, i| {
         const t = scan.next();
         try testing.expect(std.mem.eql(
@@ -524,7 +511,9 @@ pub fn testScannerTokens(
     strs: []const []const u8,
     toks: []const Token,
 ) !void {
-    var scan = Scanner.init(src);
+    var scan = Scanner{
+        .buf = src,
+    };
     for (strs) |str, i| {
         const t = scan.next();
         try testing.expect(std.mem.eql(

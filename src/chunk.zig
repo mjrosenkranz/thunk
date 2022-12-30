@@ -53,7 +53,7 @@ pub const Chunk = struct {
     /// or consts in this chunk
     pub fn pushInst(self: *Self, inst: Inst) !usize {
         if (self.n_inst >= MAX_INST) {
-            return error.TooManyInstructions;
+            return ChunkError.TooManyInstructions;
         }
 
         const offset = self.n_inst;
@@ -69,7 +69,7 @@ pub const Chunk = struct {
     pub fn pushInstSlice(self: *Self, insts: []const Inst) !usize {
         const total_offset = self.n_inst + insts.len;
         if (total_offset >= MAX_INST) {
-            return error.TooManyInstructions;
+            return ChunkError.TooManyInstructions;
         }
         for (insts) |inst| {
             _ = try self.pushInst(inst);
@@ -80,7 +80,7 @@ pub const Chunk = struct {
 
     pub fn pushConst(self: *Self, val: Value) !u16 {
         if (self.n_consts >= MAX_CONSTS) {
-            return error.TooManyConsts;
+            return ChunkError.TooManyConsts;
         }
 
         const offset = self.n_consts;
@@ -94,7 +94,7 @@ pub const Chunk = struct {
     pub fn pushConstStr(self: *Self, str: []const u8) !u16 {
         // check if we can even create the string
         if (self.n_consts >= MAX_CONSTS) {
-            return error.TooManyConsts;
+            return ChunkError.TooManyConsts;
         }
         // allocate it
         const str_ptr = try String.init(self.allocator, str);
@@ -141,8 +141,8 @@ test "chunk" {
 
     _ = try chunk.pushConst(.{ .float = 23.3 });
 
-    std.debug.print("\n", .{});
-    chunk.disassemble();
+    // std.debug.print("\n", .{});
+    // chunk.disassemble();
 
     chunk.clear();
     try std.testing.expect(chunk.n_inst == 0);

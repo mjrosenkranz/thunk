@@ -86,7 +86,9 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
 
     // TODO: ensure capacity so that we dont need try everywhere
     // create a scanner
-    self.scanner = Scanner.init(src);
+    self.scanner = Scanner{
+        .buf = src,
+    };
     const first_tok = self.scanner.next();
 
     const id = try self.parseExpr(first_tok);

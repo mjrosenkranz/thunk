@@ -55,6 +55,8 @@ pub const Node = struct {
 
     pub const Tag = enum {
         /// the root of the tree
+        /// l points to the subtree, the child
+        /// TODO: r points to the next root, if there is one?
         root,
         /// a constant value like a number or interned string
         /// the left child is the byte offset of the constant's
