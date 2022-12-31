@@ -57,7 +57,7 @@ pub const Compiler = struct {
     pub fn compile(self: *Compiler) CompileError!void {
         // start with the root
         const root = self.ast.nodes[0];
-        try self.compileNode(root.children.l);
+        try self.evalNode(root.children.l);
 
         // push return for for the last allocated register?
         _ = try self.chunk.pushInst(Inst.init(.ret, .{
@@ -66,7 +66,7 @@ pub const Compiler = struct {
         }));
     }
 
-    pub fn compileNode(
+    fn evalNode(
         self: *Compiler,
         idx: NodeIdx,
     ) CompileError!void {
@@ -85,11 +85,12 @@ pub const Compiler = struct {
                 ));
             },
             .@"if" => try self.compileCond(idx),
+            .call => try self.applyNode(idx),
             else => return CompileError.NotYetImplemented,
         }
     }
 
-    pub fn compileCond(
+    fn compileCond(
         self: *Compiler,
         if_idx: NodeIdx,
     ) CompileError!void {
@@ -98,7 +99,7 @@ pub const Compiler = struct {
 
         const if_node = self.ast.nodes[if_idx];
         // compile cond
-        try self.compileNode(if_idx + 1);
+        try self.evalNode(if_idx + 1);
         // we know that the result of compiling the condition should be in last reg
         const cond_reg = self.last_reg;
         // add test
@@ -110,7 +111,7 @@ pub const Compiler = struct {
             Inst.init(.jmp, 0),
         );
         // compile then
-        try self.compileNode(if_node.children.l);
+        try self.evalNode(if_node.children.l);
         // move the then branch
         const thn_end_idx = try self.chunk.pushInst(
             Inst.init(.move, .{
@@ -122,14 +123,13 @@ pub const Compiler = struct {
 
         var thn_jump_amt = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx);
 
-        // TODO: check if we have an else
         if (if_node.children.r != 0) {
             // compile else
             thn_jump_amt += 1;
             const els_jump_idx = try self.chunk.pushInst(
                 Inst.init(.jmp, 0),
             );
-            try self.compileNode(if_node.children.r);
+            try self.evalNode(if_node.children.r);
             // move the else branch
             const els_end_idx = try self.chunk.pushInst(
                 Inst.init(.move, .{
@@ -142,6 +142,47 @@ pub const Compiler = struct {
 
         // patch the jump instruction
         self.chunk.code[thn_jump_idx].data = thn_jump_amt;
+
+        // TODO: pop the registers that we used here
+    }
+
+    /// apply a call
+    /// we evaluate the caller and the list of arguments
+    fn applyNode(
+        self: *Compiler,
+        call_idx: NodeIdx,
+    ) CompileError!void {
+        const call_node = self.ast.nodes[call_idx];
+        const caller = self.ast.nodes[call_node.children.l];
+        // get the token of the caller
+        // check if it is a builtin proceedure
+        const caller_tag = self.ast.tokens[caller.token_idx].tag;
+        switch (caller_tag) {
+            .plus,
+            // .minus,
+            // .asterisk,
+            // .slash,
+            // .modulus,
+            // .gt,
+            // .lt,
+            // .gte,
+            // .lte,
+            // .@"and",
+            // .@"or",
+            // .@"not",
+            => {},
+            // haven't implemented any other functions
+            else => return CompileError.NotYetImplemented,
+        }
+
+        // evaluate each item in the list
+        var pair_idx = call_node.children.r;
+        // if the right child is 0 then we have reached the end of the list
+        while (pair_idx != 0) {
+            const pair = self.ast.nodes[pair_idx];
+            try self.evalNode(pair.children.l);
+            pair_idx = pair.children.r;
+        }
     }
 };
 
@@ -230,6 +271,28 @@ test "if no else" {
         // move into result register
         Inst.init(.move, .{ .r = 1, .r1 = 3 }),
         // -----------------------
+        // return
+        Inst.init(.ret, .{}),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "primitive call" {
+    const code =
+        \\(+ 1 2 3)
+    ;
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var chunk = try compile(code, &env, std.testing.allocator);
+
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load 1 in
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // add 2 and store in 1
+        Inst.init(.addconst, .{ .r = 1, .u = 1 }),
+        // add 3 and store in 1
+        Inst.init(.addconst, .{ .r = 1, .u = 2 }),
         // return
         Inst.init(.ret, .{}),
     }, chunk.code[0..chunk.n_inst]);
