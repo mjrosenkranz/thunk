@@ -213,25 +213,34 @@ pub const Compiler = struct {
         // if the right child is 0 then we have reached the end of the list
         while (pair_idx != 0) {
             pair = self.ast.nodes[pair_idx];
-            try self.evalNode(pair.children.l);
-            const reg1 = self.last_reg;
-            pair_idx = pair.children.r;
-
-            // TODO: branch on is const
-            const op = Op.fromPrimitiveTokenTag(caller_tag, false);
+            // check if the value is a constant
+            const is_const = self.ast.nodes[pair.children.l].tag == .constant;
 
             // apply primitive func to them and store in first register
-            // TOOD: determine const-ness
-            _ = try self.chunk.pushInst(.{
-                .op = op,
-                .data = @bitCast(inst.ArgSize, inst.Arg3{
-                    .r = reg0,
-                    .r1 = reg0,
-                    .r2 = reg1,
-                }),
-            });
-
-            self.freeReg();
+            if (is_const) {
+                _ = try self.chunk.pushInst(.{
+                    .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
+                    .data = @bitCast(inst.ArgSize, inst.ArgU{
+                        .r = reg0,
+                        .u = try self.chunk.pushConst(
+                            self.ast.getData(Value, self.ast.nodes[pair.children.l].children.l),
+                        ),
+                    }),
+                });
+            } else {
+                try self.evalNode(pair.children.l);
+                const reg1 = self.last_reg;
+                _ = try self.chunk.pushInst(.{
+                    .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
+                    .data = @bitCast(inst.ArgSize, inst.Arg3{
+                        .r = reg0,
+                        .r1 = reg0,
+                        .r2 = reg1,
+                    }),
+                });
+                self.freeReg();
+            }
+            pair_idx = pair.children.r;
         }
     }
 };
@@ -347,15 +356,10 @@ test "primitive call" {
     try testing.expectEqualSlices(Inst, &.{
         // load 1 into 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
-        // load 2 into 2
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
         // add them together and store in 1
-        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 2 }),
+        Inst.init(.addconst, .{ .r = 1, .u = 1 }),
         // load 3 into 2 (we popped 2 off since we don't need it anymore)
-        Inst.init(.load, .{ .r = 2, .u = 2 }),
-        // add them together and store in 1
-        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 2 }),
-
+        Inst.init(.addconst, .{ .r = 1, .u = 2 }),
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
