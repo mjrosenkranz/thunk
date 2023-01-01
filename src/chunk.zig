@@ -19,12 +19,12 @@ pub const Chunk = struct {
     code: [MAX_INST]Inst = undefined,
     /// offset in the inst array
     n_inst: usize = 0,
-    /// constediate values that might be refered to
+    /// constant values that might be refered to
     consts: [MAX_CONSTS]Value = [_]Value{Value.empty} ** MAX_CONSTS,
     /// offset in the consts array
     n_consts: usize = 0,
 
-    // TOOD: remove
+    // TODO: remove
     allocator: std.mem.Allocator = undefined,
 
     pub fn init(allocator: std.mem.Allocator) Self {
@@ -110,7 +110,7 @@ pub const Chunk = struct {
 
     /// disassemble an instruction, used for debug only
     pub fn disassemble(self: Self) void {
-        std.debug.print("constediates:\n", .{});
+        std.debug.print("constants:\n", .{});
         {
             var i: usize = 0;
             while (i < self.n_consts) : (i += 1) {

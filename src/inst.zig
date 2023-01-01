@@ -207,31 +207,32 @@ pub const Inst = packed struct(InstSize) {
 
     pub inline fn instType(comptime op: Op) type {
         return switch (op) {
-            // returns values in the registers a to b
+            // returns values in register a
+            // TODO: figure out returning multiple values
             .ret => Arg3,
-            // loads constediate value stored at u into register a
+            // loads constant value stored at u into register a
             .load => ArgU,
             // moves the value from r1 into r
             .move => Arg3,
             // adds the values in the last two registers together and stores
             // the result in the first
             .add => Arg3,
-            // adds the constediate in s to a register and stores it in there
+            // adds the constant in s to a register and stores it in there
             .addconst => ArgU,
             // multiplies the values in the last two registers together and stores
             // the result in the first
             .mul => Arg3,
-            // multiplies the constediate in s to a register and stores it in there
+            // multiplies the constant in s to a register and stores it in there
             .mulconst => ArgU,
             // subtracts the values in the last two registers together and stores
             // the result in the first
             .sub => Arg3,
-            // subtracts the constediate in s to a register and stores it in there
+            // subtracts the constant in s to a register and stores it in there
             .subconst => ArgU,
             // divides the values in the last two registers together and stores
             // the result in the first
             .div => Arg3,
-            // divides the constediate in s to a register and stores it in there
+            // divides the constant in s to a register and stores it in there
             .divconst => ArgU,
 
             // define a global variable where the symbol name is in u and value in r

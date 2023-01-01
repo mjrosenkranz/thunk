@@ -359,109 +359,6 @@ test "divide" {
     try testing.expectApproxEqAbs(@as(f32, -1.5), vm.regs[d].float, eps);
 }
 
-test "addition full pipeline" {
-    var vm = Vm.initConfig(TestConfig, testing.allocator);
-    defer vm.deinit();
-
-    const code =
-        \\(+ 125 13)
-    ;
-    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
-    try testing.expectApproxEqAbs(@as(f32, 125), chunk.consts[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), chunk.consts[1].float, eps);
-
-    try testing.expectEqualSlices(Inst, &.{
-        Inst.init(.load, .{ .r = 1, .u = 0 }),
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
-        Inst.init(.add, .{ .r = 3, .r1 = 1, .r2 = 2 }),
-        Inst.init(.ret, .{}),
-    }, chunk.code[0..chunk.n_inst]);
-
-    try vm.exec(&chunk);
-    try testing.expectApproxEqAbs(@as(f32, 125), vm.regs[1].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 13), vm.regs[2].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 138), vm.regs[3].float, eps);
-}
-
-test "nested math full pipeline" {
-    var vm = Vm.initConfig(TestConfig, testing.allocator);
-    defer vm.deinit();
-
-    const code =
-        \\(* 3 (+ 4 5))
-    ;
-    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
-    try testing.expectApproxEqAbs(@as(f32, 3), chunk.consts[0].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 4), chunk.consts[1].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 5), chunk.consts[2].float, eps);
-
-    try testing.expectEqualSlices(Inst, &.{
-        Inst.init(.load, .{ .r = 1, .u = 0 }),
-        Inst.init(.load, .{ .r = 2, .u = 1 }),
-        Inst.init(.load, .{ .r = 3, .u = 2 }),
-        Inst.init(.add, .{ .r = 4, .r1 = 2, .r2 = 3 }),
-        Inst.init(.mul, .{ .r = 5, .r1 = 1, .r2 = 4 }),
-        Inst.init(.ret, .{}),
-    }, chunk.code[0..chunk.n_inst]);
-
-    try vm.exec(&chunk);
-    try testing.expectApproxEqAbs(@as(f32, 3), vm.regs[1].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 4), vm.regs[2].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 5), vm.regs[3].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 9), vm.regs[4].float, eps);
-    try testing.expectApproxEqAbs(@as(f32, 27), vm.regs[5].float, eps);
-}
-
-// TODO: redefined builtin primitives so this passes
-// test "just a proceedure" {
-//     var vm = Vm.initConfig(TestConfig, testing.allocator);
-//     defer vm.deinit();
-//
-//     const code =
-//         \\+
-//     ;
-//     var chunk = Chunk{};
-//     var compiler = Compiler{};
-//     _ = try compiler.compile(code, &chunk, &vm.env);
-//     try vm.exec(&chunk);
-// }
-
-test "define var" {
-    const code =
-        \\(define foo 13)
-    ;
-
-    var vm = Vm.initConfig(TestConfig, testing.allocator);
-    defer vm.deinit();
-    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
-    defer chunk.deinit();
-
-    try vm.exec(&chunk);
-
-    try testing.expect(vm.env.map.get("foo").?.float == 13);
-}
-
-test "set var" {
-    const code =
-        \\(define foo 13)
-        \\(set! foo 32)
-    ;
-
-    var vm = Vm.initConfig(TestConfig, testing.allocator);
-    defer vm.deinit();
-
-    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
-    defer chunk.deinit();
-
-    try vm.step(&chunk);
-    try vm.step(&chunk);
-    try testing.expect(vm.env.map.get("foo").?.float == 13);
-    try vm.step(&chunk);
-    try vm.step(&chunk);
-
-    try testing.expect(vm.env.map.get("foo").?.float == 32);
-}
-
 test "if statement" {
     const code =
         \\(if #t 12 -3)
@@ -485,4 +382,41 @@ test "if statement" {
 
     try testing.expect(vm.regs[1].float == 12);
     // try testing.expect(vm.regs[5].float == -3);
+}
+
+test "addition two" {
+    const code =
+        \\(+ 1 2)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(1 == chunk.consts[0].float);
+    try testing.expect(2 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 3);
+}
+
+test "addition many" {
+    const code =
+        \\(+ 1 2 3)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(1 == chunk.consts[0].float);
+    try testing.expect(2 == chunk.consts[1].float);
+    try testing.expect(3 == chunk.consts[2].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 6);
 }

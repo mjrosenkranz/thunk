@@ -3,6 +3,7 @@ const testing = std.testing;
 const inst = @import("inst.zig");
 const Inst = inst.Inst;
 const Reg = inst.Reg;
+const Token = @import("token.zig").Token;
 const Env = @import("env.zig").Env;
 const Chunk = @import("chunk.zig").Chunk;
 const Value = @import("value.zig").Value;
@@ -51,6 +52,14 @@ pub const Compiler = struct {
         return self.last_reg;
     }
 
+    fn freeReg(self: *Compiler) void {
+        if (self.last_reg == 0) {
+            std.debug.print("attempt to free last register\n", .{});
+            return;
+        }
+        self.last_reg -= 1;
+    }
+
     /// produces a new chunk from the Ast given
     /// we can assume that the Ast is for a single, top-level expression
     /// and therefore will only produce one chunk
@@ -61,8 +70,7 @@ pub const Compiler = struct {
 
         // push return for for the last allocated register?
         _ = try self.chunk.pushInst(Inst.init(.ret, .{
-            //.r = self.last_reg,
-            //.r1 = self.last_reg,
+            .r = self.last_reg,
         }));
     }
 
@@ -94,7 +102,8 @@ pub const Compiler = struct {
         self: *Compiler,
         if_idx: NodeIdx,
     ) CompileError!void {
-        // where we will store the result
+        // where we will store the result.
+        // we don't the result register since it will be used outside of the if scope
         const res = try self.allocReg();
 
         const if_node = self.ast.nodes[if_idx];
@@ -112,12 +121,13 @@ pub const Compiler = struct {
         );
         // compile then
         try self.evalNode(if_node.children.l);
+        const then_reg = self.last_reg;
         // move the then branch
         const thn_end_idx = try self.chunk.pushInst(
             Inst.init(.move, .{
                 .r = res,
                 // the result of then should be in the latest register?
-                .r1 = self.last_reg,
+                .r1 = then_reg,
             }),
         );
 
@@ -131,19 +141,26 @@ pub const Compiler = struct {
             );
             try self.evalNode(if_node.children.r);
             // move the else branch
+            const else_reg = self.last_reg;
             const els_end_idx = try self.chunk.pushInst(
                 Inst.init(.move, .{
                     .r = res,
-                    .r1 = self.last_reg,
+                    .r1 = else_reg,
                 }),
             );
             self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx);
+
+            // free the else register
+            self.freeReg();
         }
+
+        // free the then register
+        self.freeReg();
+        // free the cond register
+        self.freeReg();
 
         // patch the jump instruction
         self.chunk.code[thn_jump_idx].data = thn_jump_amt;
-
-        // TODO: pop the registers that we used here
     }
 
     /// apply a call
@@ -157,7 +174,9 @@ pub const Compiler = struct {
         // get the token of the caller
         // check if it is a builtin proceedure
         const caller_tag = self.ast.tokens[caller.token_idx].tag;
-        switch (caller_tag) {
+
+        //TODO: check arity
+        return switch (caller_tag) {
             .plus,
             // .minus,
             // .asterisk,
@@ -170,18 +189,43 @@ pub const Compiler = struct {
             // .@"and",
             // .@"or",
             // .@"not",
-            => {},
+            => self.applyPrimitive(caller_tag, call_node),
             // haven't implemented any other functions
-            else => return CompileError.NotYetImplemented,
-        }
+            else => CompileError.NotYetImplemented,
+        };
+    }
 
+    fn applyPrimitive(
+        self: *Compiler,
+        caller_tag: Token.Tag,
+        call_node: Node,
+    ) CompileError!void {
+        _ = caller_tag;
         // evaluate each item in the list
         var pair_idx = call_node.children.r;
+
+        // load the first item into a register
+        var pair = self.ast.nodes[pair_idx];
+        try self.evalNode(pair.children.l);
+        const reg0 = self.last_reg;
+        pair_idx = pair.children.r;
+
         // if the right child is 0 then we have reached the end of the list
         while (pair_idx != 0) {
-            const pair = self.ast.nodes[pair_idx];
+            pair = self.ast.nodes[pair_idx];
             try self.evalNode(pair.children.l);
+            const reg1 = self.last_reg;
             pair_idx = pair.children.r;
+
+            // apply primitive func to them and store in first register
+            // TOOD: determine inst
+            _ = try self.chunk.pushInst(Inst.init(.add, .{
+                .r = reg0,
+                .r1 = reg0,
+                .r2 = reg1,
+            }));
+
+            self.freeReg();
         }
     }
 };
@@ -206,9 +250,6 @@ test "compile number literal" {
     try compiler.compile();
 
     try std.testing.expectApproxEqAbs(@as(f32, 32), chunk.consts[0].float, eps);
-
-    std.debug.print("\n", .{});
-    chunk.disassemble();
 }
 
 test "if statement" {
@@ -217,8 +258,19 @@ test "if statement" {
     ;
     var env = Env.init(testing.allocator);
     defer env.deinit();
-    var chunk = try compile(code, &env, std.testing.allocator);
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
 
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    var chunk = Chunk{};
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+    try compiler.compile();
+
+    try testing.expect(compiler.last_reg == 1);
     try testing.expect(true == chunk.consts[0].boolean);
     try testing.expect(12 == chunk.consts[1].float);
     try testing.expect(-3 == chunk.consts[2].float);
@@ -243,7 +295,7 @@ test "if statement" {
         Inst.init(.move, .{ .r = 1, .r1 = 4 }),
         // -----------------------
         // return
-        Inst.init(.ret, .{}),
+        Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
 }
 
@@ -272,7 +324,7 @@ test "if no else" {
         Inst.init(.move, .{ .r = 1, .r1 = 3 }),
         // -----------------------
         // return
-        Inst.init(.ret, .{}),
+        Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
 }
 
@@ -287,13 +339,18 @@ test "primitive call" {
     chunk.disassemble();
 
     try testing.expectEqualSlices(Inst, &.{
-        // load 1 in
+        // load 1 into 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
-        // add 2 and store in 1
-        Inst.init(.addconst, .{ .r = 1, .u = 1 }),
-        // add 3 and store in 1
-        Inst.init(.addconst, .{ .r = 1, .u = 2 }),
+        // load 2 into 2
+        Inst.init(.load, .{ .r = 2, .u = 1 }),
+        // add them together and store in 1
+        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 2 }),
+        // load 3 into 2 (we popped 2 off since we don't need it anymore)
+        Inst.init(.load, .{ .r = 2, .u = 2 }),
+        // add them together and store in 1
+        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 2 }),
+
         // return
-        Inst.init(.ret, .{}),
+        Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
 }
