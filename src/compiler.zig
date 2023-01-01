@@ -3,6 +3,7 @@ const testing = std.testing;
 const inst = @import("inst.zig");
 const Inst = inst.Inst;
 const Reg = inst.Reg;
+const Op = inst.Op;
 const Token = @import("token.zig").Token;
 const Env = @import("env.zig").Env;
 const Chunk = @import("chunk.zig").Chunk;
@@ -178,9 +179,9 @@ pub const Compiler = struct {
         //TODO: check arity
         return switch (caller_tag) {
             .plus,
-            // .minus,
-            // .asterisk,
-            // .slash,
+            .minus,
+            .asterisk,
+            .slash,
             // .modulus,
             // .gt,
             // .lt,
@@ -200,7 +201,6 @@ pub const Compiler = struct {
         caller_tag: Token.Tag,
         call_node: Node,
     ) CompileError!void {
-        _ = caller_tag;
         // evaluate each item in the list
         var pair_idx = call_node.children.r;
 
@@ -217,13 +217,19 @@ pub const Compiler = struct {
             const reg1 = self.last_reg;
             pair_idx = pair.children.r;
 
+            // TODO: branch on is const
+            const op = Op.fromPrimitiveTokenTag(caller_tag, false);
+
             // apply primitive func to them and store in first register
-            // TOOD: determine inst
-            _ = try self.chunk.pushInst(Inst.init(.add, .{
-                .r = reg0,
-                .r1 = reg0,
-                .r2 = reg1,
-            }));
+            // TOOD: determine const-ness
+            _ = try self.chunk.pushInst(.{
+                .op = op,
+                .data = @bitCast(inst.ArgSize, inst.Arg3{
+                    .r = reg0,
+                    .r1 = reg0,
+                    .r2 = reg1,
+                }),
+            });
 
             self.freeReg();
         }

@@ -420,3 +420,25 @@ test "addition many" {
 
     try testing.expect(vm.regs[1].float == 6);
 }
+
+test "nested arithmetic" {
+    const code =
+        \\(+ (/ 12 3) (- 2 3) (* 3 2))
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(chunk.consts[0].float == 12);
+    try testing.expect(chunk.consts[1].float == 3);
+    try testing.expect(chunk.consts[2].float == 2);
+    try testing.expect(chunk.consts[3].float == 3);
+    try testing.expect(chunk.consts[4].float == 3);
+    try testing.expect(chunk.consts[5].float == 2);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 9);
+}

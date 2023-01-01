@@ -1,4 +1,5 @@
 const std = @import("std");
+const TokenTag = @import("token.zig").Token.Tag;
 
 /// backing int of an opcode
 pub const OpSize = u8;
@@ -25,6 +26,18 @@ pub const Op = enum(OpSize) {
     divconst,
     define_global,
     set_global,
+
+    /// helper function for converting a primitive operation to
+    /// a supported opcode
+    pub fn fromPrimitiveTokenTag(tag: TokenTag, is_const: bool) Op {
+        return switch (tag) {
+            .plus => if (is_const) .addconst else .add,
+            .minus => if (is_const) .subconst else .sub,
+            .asterisk => if (is_const) .mulconst else .mul,
+            .slash => if (is_const) .divconst else .div,
+            else => unreachable,
+        };
+    }
 };
 
 /// Typesafe register arguments
