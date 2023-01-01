@@ -130,6 +130,11 @@ pub const Vm = struct {
                     self.ip += 1;
                 }
             },
+            .@"not" => {
+                const args = inst.arg3();
+                const r1 = self.regs[args.r1].truthy();
+                self.regs[args.r] = Value{ .boolean = !r1 };
+            },
             .lt => {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].lt(self.regs[args.r2]);
@@ -405,6 +410,19 @@ test "if statement" {
     // try testing.expect(vm.regs[5].float == -3);
 }
 
+test "addition none" {
+    const code =
+        \\(+)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    try testing.expectError(
+        compiler.CompileError.WrongNumberArguments,
+        compiler.compile(code, &vm.env, testing.allocator),
+    );
+}
+
 test "addition one" {
     const code =
         \\(+ 2)
@@ -610,4 +628,22 @@ test "exec or true" {
     try vm.exec(&chunk);
 
     try testing.expect(vm.regs[1].boolean == true);
+}
+
+test "exec not" {
+    const code =
+        \\(not #t)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(true == chunk.consts[0].boolean);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean == false);
 }

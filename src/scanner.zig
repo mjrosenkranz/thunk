@@ -119,7 +119,7 @@ pub const Scanner = struct {
                                 break;
                             },
                             '%' => {
-                                tok.tag = .modulus;
+                                tok.tag = .modulo;
                                 break;
                             },
 
@@ -632,7 +632,7 @@ test "numbers" {
         .minus,
         .asterisk,
         .slash,
-        .modulus,
+        .modulo,
         .period,
         .number,
         .number,

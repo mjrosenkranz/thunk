@@ -17,6 +17,7 @@ const Node = Ast.Node;
 
 pub const CompileError = error{
     OutOfRegisters,
+    WrongNumberArguments,
     NotYetImplemented,
 } || Chunk.ChunkError || Parser.ParseError;
 
@@ -179,13 +180,12 @@ pub const Compiler = struct {
         const args_idx = call_node.children.r;
         const caller_tag = self.ast.tokens[caller.token_idx].tag;
 
-        //TODO: check arity
         return switch (caller_tag) {
             .plus,
             .minus,
             .asterisk,
             .slash,
-            // .modulus,
+            .modulo,
             .gt,
             .lt,
             .gte,
@@ -206,16 +206,22 @@ pub const Compiler = struct {
         call_data: FnCall,
         args_idx: NodeIdx,
     ) CompileError!void {
-        _ = call_data;
+        // if we are using modulo then check arity
+        if (caller_tag == .modulo and call_data.n_args != 2) {
+            return CompileError.WrongNumberArguments;
+        }
+
+        if (call_data.n_args == 0) {
+            return CompileError.WrongNumberArguments;
+        }
+
         // evaluate each item in the list
         var pair_idx = args_idx;
-
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
         try self.evalNode(pair.children.l);
         const reg0 = self.last_reg;
         pair_idx = pair.children.r;
-
         // can the instruciton be constantized
         const const_inst = switch (caller_tag) {
             .plus,
@@ -269,8 +275,10 @@ pub const Compiler = struct {
         call_data: FnCall,
         args_idx: NodeIdx,
     ) CompileError!void {
-        _ = call_data;
-        // TODO: handle not and airity
+        if (call_data.n_args == 0) {
+            return CompileError.WrongNumberArguments;
+        }
+
         // evaluate each item in the list
         var pair_idx = args_idx;
 
@@ -279,6 +287,22 @@ pub const Compiler = struct {
         try self.evalNode(pair.children.l);
         const reg = self.last_reg;
         pair_idx = pair.children.r;
+
+        // if we are using not then we only need the first item
+        if (caller_tag == .@"not") {
+            if (call_data.n_args != 1) {
+                return CompileError.WrongNumberArguments;
+            }
+
+            _ = try self.chunk.pushInst(
+                Inst.init(.@"not", .{
+                    .r = reg,
+                    .r1 = reg,
+                }),
+            );
+
+            return;
+        }
 
         // index where we start adding jumps
         const start_idx = self.chunk.n_inst - 1;
@@ -519,4 +543,33 @@ test "or" {
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
+}
+
+test "not" {
+    const code =
+        \\(not #f)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var chunk = try compile(code, &env, std.testing.allocator);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load arg1 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"not", .{ .r = 1, .r1 = 1 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "not too many" {
+    const code =
+        \\(not #f 33)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(CompileError.WrongNumberArguments, compile(code, &env, std.testing.allocator));
 }

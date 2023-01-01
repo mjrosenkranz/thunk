@@ -36,7 +36,7 @@ pub const Tag = enum {
     minus,
     asterisk,
     slash,
-    modulus,
+    modulo,
     gt,
     lt,
     gte,

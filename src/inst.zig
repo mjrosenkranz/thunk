@@ -16,6 +16,7 @@ pub const Op = enum(OpSize) {
     jmp,
     eq_true,
     @"test",
+    @"not",
     add,
     addconst,
     mul,
@@ -225,6 +226,13 @@ pub const Inst = packed struct(InstSize) {
                     if (self.arg3().r2 > 0) true else false,
                 });
             },
+            .@"not" => {
+                std.debug.print(offset_fmt ++ "not: reg[{}] = !reg[{}]\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                });
+            },
             .lt => {
                 std.debug.print(offset_fmt ++ "lt: reg[{}] = reg[{}] < reg[{}]\n", .{
                     offset,
@@ -302,6 +310,8 @@ pub const Inst = packed struct(InstSize) {
             // if r2 == 0 then we test if false
             // if r2 >= 1 then we test if true
             .@"test" => Arg3,
+            // store !r1 in r
+            .@"not" => Arg3,
             // stores true into r if r1 < r2, otherwise stores false
             .lt => Arg3,
             // stores true into r if r1 <= r2, otherwise stores false

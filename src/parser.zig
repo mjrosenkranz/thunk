@@ -122,7 +122,7 @@ pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
         .minus,
         .asterisk,
         .slash,
-        .modulus,
+        .modulo,
         .gt,
         .lt,
         .gte,
