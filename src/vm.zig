@@ -405,6 +405,23 @@ test "if statement" {
     // try testing.expect(vm.regs[5].float == -3);
 }
 
+test "addition one" {
+    const code =
+        \\(+ 2)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(2 == chunk.consts[0].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 2);
+}
+
 test "addition two" {
     const code =
         \\(+ 1 2)

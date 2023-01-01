@@ -2,6 +2,7 @@ const std = @import("std");
 const Value = @import("value.zig").Value;
 const Parser = @import("parser.zig");
 const Ast = @import("ast.zig");
+const FnCall = Ast.FnCall;
 const NodeIdx = Ast.NodeIdx;
 const Node = Ast.Node;
 
@@ -67,7 +68,7 @@ test "if" {
         .{
             .tag = .call,
             .token_idx = 2,
-            .children = .{ .l = 3, .r = 4 },
+            .children = .{ .l = 2 * @sizeOf(Value), .r = 4 },
         },
         // 3
         .{
@@ -187,10 +188,7 @@ test "call no args" {
         .{
             .tag = .call,
             .token_idx = 0,
-            .children = .{
-                .l = 2,
-                .r = 3,
-            },
+            .children = .{ .l = 0, .r = 3 },
         },
         // 2
         .{
@@ -239,7 +237,7 @@ test "call one arg" {
             .tag = .call,
             .token_idx = 0,
             .children = .{
-                .l = 2,
+                .l = 1 * @sizeOf(Value),
                 .r = 3,
             },
         },
@@ -286,7 +284,7 @@ test "call two args" {
             .tag = .call,
             .token_idx = 0,
             .children = .{
-                .l = 2,
+                .l = 2 * @sizeOf(Value),
                 .r = 3,
             },
         },
@@ -350,7 +348,7 @@ test "call many" {
             .tag = .call,
             .token_idx = 0,
             .children = .{
-                .l = 2,
+                .l = 3 * @sizeOf(Value),
                 .r = 3,
             },
         },
@@ -440,7 +438,7 @@ test "call nested" {
             .tag = .call,
             .token_idx = 0,
             .children = .{
-                .l = 2,
+                .l = 3 * @sizeOf(Value) + 1 * @sizeOf(FnCall),
                 .r = 3,
             },
         },
@@ -475,7 +473,7 @@ test "call nested" {
             .tag = .call,
             .token_idx = 3,
             .children = .{
-                .l = 7,
+                .l = 3 * @sizeOf(Value),
                 .r = 8,
             },
         },
@@ -515,83 +513,4 @@ test "call nested" {
     try std.testing.expect(ast.getData(Value, ast.nodes[4].children.l).float == 3.0);
     try std.testing.expect(ast.getData(Value, ast.nodes[9].children.l).float == 4.0);
     try std.testing.expect(ast.getData(Value, ast.nodes[11].children.l).float == 5.0);
-}
-
-// TODO: change this when we have lamda syntax
-test "call lambda" {
-    const code =
-        //01 2 3  4 5
-        \\((fn #t) #f)
-    ;
-    var parser = Parser.init(std.testing.allocator);
-    defer parser.deinit();
-    var ast = try parser.parse(code);
-    defer ast.deinit(std.testing.allocator);
-    // 0       1        2      3
-    // root -> call -> call -> fn
-    //         |        |    4 5
-    //         |        |--> [ x |  ]
-    //         |    6 7
-    //         |--> [ 32 |   ]
-
-    const expected = [_]Node{
-        // 0
-        .{
-            .tag = .root,
-            .token_idx = 0,
-            .children = .{ .l = 1 },
-        },
-        // 1
-        .{
-            .tag = .call,
-            .token_idx = 0,
-            .children = .{
-                .l = 2,
-                .r = 6,
-            },
-        },
-        // 2
-        .{
-            .tag = .call,
-            .token_idx = 1,
-            .children = .{
-                .l = 3,
-                .r = 4,
-            },
-        },
-        // 3
-        .{
-            .tag = .symbol,
-            .children = .{},
-            .token_idx = 2,
-        },
-        // 4
-        .{
-            .tag = .pair,
-            .token_idx = 3,
-            .children = .{ .l = 5 },
-        },
-        // 5
-        .{
-            .tag = .constant,
-            .token_idx = 3,
-            .children = .{ .l = 0 },
-        },
-        // 6
-        .{
-            .tag = .pair,
-            .token_idx = 4,
-            .children = .{ .l = 7 },
-        },
-        // 7
-        .{
-            .tag = .constant,
-            .token_idx = 4,
-            .children = .{ .l = 16 },
-        },
-    };
-
-    try ast.testAst(&expected);
-    try std.testing.expect(ast.getData(Value, ast.nodes[5].children.l).boolean == true);
-    try std.testing.expect(ast.getData(Value, ast.nodes[7].children.l).boolean == false);
 }

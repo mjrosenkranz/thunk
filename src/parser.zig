@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const Scanner = @import("scanner.zig").Scanner;
 const Token = @import("token.zig");
 const Ast = @import("ast.zig");
+const FnCall = Ast.FnCall;
 const NodeIdx = Ast.NodeIdx;
 const Node = Ast.Node;
 const DATA_ALIGN = Ast.DATA_ALIGN;
@@ -279,25 +280,22 @@ pub fn parseCall(
 
     // get the thing we are calling
     const caller = try self.parseExpr(caller_tok);
-    self.nodes.items[call_idx].children.l = caller;
-    // self.nodes.items[call_idx].token_idx = self.nodes.items[caller].token_idx;
 
     // we start making a list by creating the first pair
-    // var last: ?NodeIdx = null;
     var pair_idx = @intCast(NodeIdx, self.nodes.items.len);
-    self.nodes.items[call_idx].children.r = pair_idx;
     try self.nodes.append(.{
         .tag = .pair,
         .token_idx = self.nodes.items[caller].token_idx,
         .children = .{},
     });
+    // add the pair to the call
+    self.nodes.items[call_idx].children.r = pair_idx;
 
     var n_args: u8 = 0;
 
     while (true) {
         const tok = self.scanner.next();
 
-        // TODO: handle if the symbol makes this a special form
         switch (tok.tag) {
             // we at the end of the list
             .rparen => {
@@ -332,6 +330,14 @@ pub fn parseCall(
             },
         }
     }
+
+    // now that we have the arguments list setup, we can create function data
+    const data_idx = try self.pushData(FnCall, .{
+        .n_args = n_args,
+        .caller_idx = caller,
+    });
+    // and set the right child to the index
+    self.nodes.items[call_idx].children.l = data_idx;
 
     return call_idx;
 }

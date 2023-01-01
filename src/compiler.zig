@@ -11,6 +11,7 @@ const Value = @import("value.zig").Value;
 const Allocator = std.mem.Allocator;
 const Parser = @import("parser.zig");
 const Ast = @import("ast.zig");
+const FnCall = Ast.FnCall;
 const NodeIdx = Ast.NodeIdx;
 const Node = Ast.Node;
 
@@ -171,9 +172,11 @@ pub const Compiler = struct {
         call_idx: NodeIdx,
     ) CompileError!void {
         const call_node = self.ast.nodes[call_idx];
-        const caller = self.ast.nodes[call_node.children.l];
+        const call_data = self.ast.getData(FnCall, call_node.children.l);
+        const caller = self.ast.nodes[call_data.caller_idx];
         // get the token of the caller
         // check if it is a builtin proceedure
+        const args_idx = call_node.children.r;
         const caller_tag = self.ast.tokens[caller.token_idx].tag;
 
         //TODO: check arity
@@ -187,11 +190,11 @@ pub const Compiler = struct {
             .lt,
             .gte,
             .lte,
-            => self.applyBinOp(caller_tag, call_node),
+            => self.applyBinOp(caller_tag, call_data, args_idx),
             .@"and",
             .@"or",
             .@"not",
-            => self.applyBool(caller_tag, call_node),
+            => self.applyBool(caller_tag, call_data, args_idx),
             // haven't implemented any other functions
             else => CompileError.NotYetImplemented,
         };
@@ -200,10 +203,12 @@ pub const Compiler = struct {
     fn applyBinOp(
         self: *Compiler,
         caller_tag: Token.Tag,
-        call_node: Node,
+        call_data: FnCall,
+        args_idx: NodeIdx,
     ) CompileError!void {
+        _ = call_data;
         // evaluate each item in the list
-        var pair_idx = call_node.children.r;
+        var pair_idx = args_idx;
 
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
@@ -261,11 +266,13 @@ pub const Compiler = struct {
     fn applyBool(
         self: *Compiler,
         caller_tag: Token.Tag,
-        call_node: Node,
+        call_data: FnCall,
+        args_idx: NodeIdx,
     ) CompileError!void {
+        _ = call_data;
         // TODO: handle not and airity
         // evaluate each item in the list
-        var pair_idx = call_node.children.r;
+        var pair_idx = args_idx;
 
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];

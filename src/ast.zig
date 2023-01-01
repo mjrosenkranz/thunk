@@ -67,9 +67,8 @@ pub const Node = struct {
         /// name in the data list
         symbol,
         /// the application of a procedure with params
-        /// l points to the symbol we are calling
-        /// r points to the first argument
-        /// if r is 0 then there are no arguments
+        /// l points to the call data
+        /// r points to the arguments
         call,
         /// basically a linked list
         /// l is the value at this point in the list
@@ -116,7 +115,8 @@ pub const Node = struct {
             },
             .call => {
                 std.debug.print("(call ", .{});
-                ast.nodes[n.children.l].pprint(n.children.l, ast);
+                const call = ast.getData(FnCall, n.children.l);
+                ast.nodes[call.caller_idx].pprint(call.caller_idx, ast);
                 std.debug.print(" ", .{});
                 ast.nodes[n.children.r].pprint(n.children.r, ast);
                 std.debug.print(")", .{});
@@ -198,3 +198,11 @@ pub fn printTokens(ast: Ast) void {
         t.print();
     }
 }
+
+// TODO: should this go somewhere else?
+pub const FnCall = packed struct {
+    /// number of arguments given to this call
+    n_args: NodeIdx,
+    /// index of the thing we are calling
+    caller_idx: NodeIdx,
+};
