@@ -119,6 +119,17 @@ pub const Vm = struct {
                     self.ip += 1;
                 }
             },
+            .@"test" => {
+                const args = inst.arg3();
+                const compare = if (args.r2 > 0) true else false;
+                const r1 = self.regs[args.r1].truthy();
+                const res = r1 == compare;
+                self.regs[args.r] = Value{ .boolean = r1 };
+
+                if (!res) {
+                    self.ip += 1;
+                }
+            },
             .lt => {
                 const args = inst.arg3();
                 self.regs[args.r] = try self.regs[args.r1].lt(self.regs[args.r2]);
@@ -506,4 +517,42 @@ test "ineq eql" {
     try vm.exec(&chunk);
 
     try testing.expect(vm.regs[1].boolean);
+}
+
+test "exec and" {
+    const code =
+        \\(and #t 33)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(33 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 33);
+}
+
+test "exec and false" {
+    const code =
+        \\(and #f 33 44)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(false == chunk.consts[0].boolean);
+    try testing.expect(33 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean == false);
 }

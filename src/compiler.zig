@@ -187,16 +187,17 @@ pub const Compiler = struct {
             .lt,
             .gte,
             .lte,
-            // .@"and",
-            // .@"or",
-            // .@"not",
-            => self.applyPrimitive(caller_tag, call_node),
+            => self.applyBinOp(caller_tag, call_node),
+            .@"and",
+            .@"or",
+            .@"not",
+            => self.applyBool(caller_tag, call_node),
             // haven't implemented any other functions
             else => CompileError.NotYetImplemented,
         };
     }
 
-    fn applyPrimitive(
+    fn applyBinOp(
         self: *Compiler,
         caller_tag: Token.Tag,
         call_node: Node,
@@ -254,6 +255,57 @@ pub const Compiler = struct {
                 self.freeReg();
             }
             pair_idx = pair.children.r;
+        }
+    }
+
+    fn applyBool(
+        self: *Compiler,
+        caller_tag: Token.Tag,
+        call_node: Node,
+    ) CompileError!void {
+        _ = caller_tag;
+        // evaluate each item in the list
+        var pair_idx = call_node.children.r;
+
+        // load the first item into a register
+        var pair = self.ast.nodes[pair_idx];
+        try self.evalNode(pair.children.l);
+        const reg = self.last_reg;
+        pair_idx = pair.children.r;
+
+        // index where we start adding jumps
+        const start_idx = self.chunk.n_inst - 1;
+
+        while (pair_idx != 0) {
+            // test the last value
+            _ = try self.chunk.pushInst(
+                Inst.init(.@"test", .{
+                    .r = reg,
+                    .r1 = reg,
+                    .r2 = 0,
+                }),
+            );
+            // get the index of the jump instruction
+            _ = try self.chunk.pushInst(
+                Inst.init(.jmp, 0),
+            );
+            // free reg, since we only used it in the test instruction
+            self.freeReg();
+
+            // compile this value
+            pair = self.ast.nodes[pair_idx];
+            try self.evalNode(pair.children.l);
+
+            pair_idx = pair.children.r;
+        }
+
+        // patch all the instructions
+        const done_idx = self.chunk.n_inst - 1;
+        for (self.chunk.code[start_idx..done_idx]) |*jmp, i| {
+            if (jmp.op == .jmp) {
+                const jmp_amt = @intCast(inst.ArgI, done_idx - i);
+                jmp.data = jmp_amt;
+            }
         }
     }
 };
@@ -373,6 +425,61 @@ test "primitive call" {
         Inst.init(.addconst, .{ .r = 1, .u = 1 }),
         // load 3 into 2 (we popped 2 off since we don't need it anymore)
         Inst.init(.addconst, .{ .r = 1, .u = 2 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "and" {
+    const code =
+        \\(and #t 33)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var chunk = try compile(code, &env, std.testing.allocator);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load arg1 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
+        // if we are at this instruction then r1 was false and we are done
+        Inst.init(.jmp, 1),
+        // load arg2 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "and short circuit" {
+    const code =
+        \\(and #t 33 #f)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var chunk = try compile(code, &env, std.testing.allocator);
+
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load arg1 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
+        // if we are at this instruction then r1 was false and we are done
+        Inst.init(.jmp, 4),
+        // load arg2 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
+        // if we are at this instruction then r1 was false and we are done
+        Inst.init(.jmp, 1),
+        // load arg3 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 2 }),
+
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);

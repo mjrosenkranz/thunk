@@ -15,6 +15,7 @@ pub const Op = enum(OpSize) {
     move,
     jmp,
     eq_true,
+    @"test",
     add,
     addconst,
     mul,
@@ -216,6 +217,14 @@ pub const Inst = packed struct(InstSize) {
                     self.arg3().r,
                 });
             },
+            .@"test" => {
+                std.debug.print(offset_fmt ++ "test: reg[{}] = reg[{}] == {}\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                    if (self.arg3().r2 > 0) true else false,
+                });
+            },
             .lt => {
                 std.debug.print(offset_fmt ++ "lt: reg[{}] = reg[{}] < reg[{}]\n", .{
                     offset,
@@ -289,6 +298,10 @@ pub const Inst = packed struct(InstSize) {
             .jmp => ArgI,
             // if the value in reg r is truthy then skip next inst
             .eq_true => Arg3,
+            // stores if r1 == bool[r2] into r, and skips next instruction if false
+            // if r2 == 0 then we test if false
+            // if r2 >= 1 then we test if true
+            .@"test" => Arg3,
             // stores true into r if r1 < r2, otherwise stores false
             .lt => Arg3,
             // stores true into r if r1 <= r2, otherwise stores false
