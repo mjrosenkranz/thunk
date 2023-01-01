@@ -263,7 +263,7 @@ pub const Compiler = struct {
         caller_tag: Token.Tag,
         call_node: Node,
     ) CompileError!void {
-        _ = caller_tag;
+        // TODO: handle not and airity
         // evaluate each item in the list
         var pair_idx = call_node.children.r;
 
@@ -276,13 +276,19 @@ pub const Compiler = struct {
         // index where we start adding jumps
         const start_idx = self.chunk.n_inst - 1;
 
+        const compare: Reg = switch (caller_tag) {
+            .@"or" => 1,
+            .@"and" => 0,
+            else => return CompileError.NotYetImplemented,
+        };
+
         while (pair_idx != 0) {
             // test the last value
             _ = try self.chunk.pushInst(
                 Inst.init(.@"test", .{
                     .r = reg,
                     .r1 = reg,
-                    .r2 = 0,
+                    .r2 = compare,
                 }),
             );
             // get the index of the jump instruction
@@ -480,6 +486,29 @@ test "and short circuit" {
         // load arg3 into reg1
         Inst.init(.load, .{ .r = 1, .u = 2 }),
 
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "or" {
+    const code =
+        \\(or #f 33)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var chunk = try compile(code, &env, std.testing.allocator);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load arg1 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 1 }),
+        // if we are at this instruction then r1 was false and we are done
+        Inst.init(.jmp, 1),
+        // load arg2 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);

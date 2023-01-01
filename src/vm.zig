@@ -556,3 +556,41 @@ test "exec and false" {
 
     try testing.expect(vm.regs[1].boolean == false);
 }
+
+test "exec or" {
+    const code =
+        \\(or #f 33)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(false == chunk.consts[0].boolean);
+    try testing.expect(33 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].float == 33);
+}
+
+test "exec or true" {
+    const code =
+        \\(or #t 33 44)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(true == chunk.consts[0].boolean);
+    try testing.expect(33 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean == true);
+}
