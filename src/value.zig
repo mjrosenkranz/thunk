@@ -114,6 +114,30 @@ pub const Value = union(ValueType) {
             },
         };
     }
+
+    pub inline fn lt(a: Value, b: Value) !Value {
+        try assertType(.float, a);
+        try assertType(.float, b);
+        return Value{ .boolean = a.float < b.float };
+    }
+
+    pub inline fn lte(a: Value, b: Value) !Value {
+        try assertType(.float, a);
+        try assertType(.float, b);
+        return Value{ .boolean = a.float <= b.float };
+    }
+
+    pub inline fn gt(a: Value, b: Value) !Value {
+        try assertType(.float, a);
+        try assertType(.float, b);
+        return Value{ .boolean = a.float > b.float };
+    }
+
+    pub inline fn gte(a: Value, b: Value) !Value {
+        try assertType(.float, a);
+        try assertType(.float, b);
+        return Value{ .boolean = a.float >= b.float };
+    }
 };
 
 test "assert" {

@@ -15,7 +15,6 @@ pub const Op = enum(OpSize) {
     move,
     jmp,
     eq_true,
-    eq_false,
     add,
     addconst,
     mul,
@@ -26,6 +25,10 @@ pub const Op = enum(OpSize) {
     divconst,
     define_global,
     set_global,
+    lt,
+    lte,
+    gt,
+    gte,
 
     /// helper function for converting a primitive operation to
     /// a supported opcode
@@ -35,6 +38,10 @@ pub const Op = enum(OpSize) {
             .minus => if (is_const) .subconst else .sub,
             .asterisk => if (is_const) .mulconst else .mul,
             .slash => if (is_const) .divconst else .div,
+            .gt => .gt,
+            .lt => .lt,
+            .gte => .gte,
+            .lte => .lte,
             else => unreachable,
         };
     }
@@ -203,16 +210,42 @@ pub const Inst = packed struct(InstSize) {
                     self.data,
                 });
             },
-            .eq_false => {
-                std.debug.print(offset_fmt ++ "eq_false: if !reg[{}]: ip += 1\n", .{
-                    offset,
-                    self.arg3().r,
-                });
-            },
             .eq_true => {
                 std.debug.print(offset_fmt ++ "eq_true: if reg[{}]: ip += 1\n", .{
                     offset,
                     self.arg3().r,
+                });
+            },
+            .lt => {
+                std.debug.print(offset_fmt ++ "lt: reg[{}] = reg[{}] < reg[{}]\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                    self.arg3().r2,
+                });
+            },
+            .lte => {
+                std.debug.print(offset_fmt ++ "lte: reg[{}] = reg[{}] <= reg[{}]\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                    self.arg3().r2,
+                });
+            },
+            .gt => {
+                std.debug.print(offset_fmt ++ "gt: reg[{}] = reg[{}] > reg[{}]\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                    self.arg3().r2,
+                });
+            },
+            .gte => {
+                std.debug.print(offset_fmt ++ "gte: reg[{}] = reg[{}] >= reg[{}]\n", .{
+                    offset,
+                    self.arg3().r,
+                    self.arg3().r1,
+                    self.arg3().r2,
                 });
             },
         }
@@ -256,8 +289,14 @@ pub const Inst = packed struct(InstSize) {
             .jmp => ArgI,
             // if the value in reg r is truthy then skip next inst
             .eq_true => Arg3,
-            // if the value in reg r is false then skip next inst
-            .eq_false => Arg3,
+            // stores true into r if r1 < r2, otherwise stores false
+            .lt => Arg3,
+            // stores true into r if r1 <= r2, otherwise stores false
+            .lte => Arg3,
+            // stores true into r if r1 > r2, otherwise stores false
+            .gt => Arg3,
+            // stores true into r if r1 >= r2, otherwise stores false
+            .gte => Arg3,
         };
     }
 };

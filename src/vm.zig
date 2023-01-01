@@ -119,11 +119,21 @@ pub const Vm = struct {
                     self.ip += 1;
                 }
             },
-            .eq_false => {
+            .lt => {
                 const args = inst.arg3();
-                if (!self.regs[args.r].truthy()) {
-                    self.ip += 1;
-                }
+                self.regs[args.r] = try self.regs[args.r1].lt(self.regs[args.r2]);
+            },
+            .lte => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].lte(self.regs[args.r2]);
+            },
+            .gt => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].gt(self.regs[args.r2]);
+            },
+            .gte => {
+                const args = inst.arg3();
+                self.regs[args.r] = try self.regs[args.r1].gte(self.regs[args.r2]);
             },
         }
 
@@ -441,4 +451,59 @@ test "nested arithmetic" {
     try vm.exec(&chunk);
 
     try testing.expect(vm.regs[1].float == 9);
+}
+
+// TODO: make these one test once you have multiple expressions
+test "ineq" {
+    const code =
+        \\(< 3 4)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(3 == chunk.consts[0].float);
+    try testing.expect(4 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean);
+}
+
+test "ineq false" {
+    const code =
+        \\(> 3 4)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(3 == chunk.consts[0].float);
+    try testing.expect(4 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean == false);
+}
+
+test "ineq eql" {
+    const code =
+        \\(>= 4 4)
+    ;
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(4 == chunk.consts[0].float);
+    try testing.expect(4 == chunk.consts[1].float);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean);
 }

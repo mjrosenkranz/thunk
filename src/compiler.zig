@@ -183,10 +183,10 @@ pub const Compiler = struct {
             .asterisk,
             .slash,
             // .modulus,
-            // .gt,
-            // .lt,
-            // .gte,
-            // .lte,
+            .gt,
+            .lt,
+            .gte,
+            .lte,
             // .@"and",
             // .@"or",
             // .@"not",
@@ -210,6 +210,16 @@ pub const Compiler = struct {
         const reg0 = self.last_reg;
         pair_idx = pair.children.r;
 
+        // can the instruciton be constantized
+        const const_inst = switch (caller_tag) {
+            .plus,
+            .minus,
+            .asterisk,
+            .slash,
+            => true,
+            else => false,
+        };
+
         // if the right child is 0 then we have reached the end of the list
         while (pair_idx != 0) {
             pair = self.ast.nodes[pair_idx];
@@ -217,7 +227,7 @@ pub const Compiler = struct {
             const is_const = self.ast.nodes[pair.children.l].tag == .constant;
 
             // apply primitive func to them and store in first register
-            if (is_const) {
+            if (const_inst and is_const) {
                 _ = try self.chunk.pushInst(.{
                     .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
                     .data = @bitCast(inst.ArgSize, inst.ArgU{
@@ -228,8 +238,10 @@ pub const Compiler = struct {
                     }),
                 });
             } else {
+                // get the value into a register
                 try self.evalNode(pair.children.l);
                 const reg1 = self.last_reg;
+                // if we are doing arithmetic then we can do the const stuff
                 _ = try self.chunk.pushInst(.{
                     .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
                     .data = @bitCast(inst.ArgSize, inst.Arg3{
@@ -238,6 +250,7 @@ pub const Compiler = struct {
                         .r2 = reg1,
                     }),
                 });
+
                 self.freeReg();
             }
             pair_idx = pair.children.r;
