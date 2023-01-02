@@ -73,30 +73,35 @@ pub const ParseError = error{
     UndexpectedRightParen,
     UnexpectedTag,
     UnexpectedEof,
+    ExpectedCloseParen,
 
     SyntaxError,
 } || Allocator.Error;
 
 /// Parse the whole source into a tree
 pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
-    try self.nodes.append(.{
-        .tag = .root,
-        .token_idx = 0,
-        .children = .{},
-    });
-
     // TODO: ensure capacity so that we dont need try everywhere
     // create a scanner
     self.scanner = Scanner{
         .buf = src,
     };
-    const first_tok = self.scanner.next();
-
-    const id = try self.parseExpr(first_tok);
-    // modify the root to use the new found child
-    self.nodes.items[0].children = .{
-        .l = id,
-    };
+    var tok = self.scanner.next();
+    var last_root_idx: NodeIdx = 0;
+    var root_idx: NodeIdx = 0;
+    while (tok.tag != .eof) : (tok = self.scanner.next()) {
+        root_idx = @intCast(NodeIdx, self.nodes.items.len);
+        if (root_idx != 0) {
+            self.nodes.items[last_root_idx].children.r = root_idx;
+        }
+        try self.nodes.append(.{
+            .tag = .root,
+            .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+            .children = .{},
+        });
+        const id = try self.parseExpr(tok);
+        // modify the root to use the new found child
+        self.nodes.items[root_idx].children = .{ .l = id };
+    }
 
     return Ast{
         .tokens = self.tokens.toOwnedSlice(),
@@ -113,7 +118,6 @@ pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
     if (tok.tag == .eof) return 0;
     return switch (tok.tag) {
         .number => try self.parseNum(tok),
-
         .@"false",
         .@"true",
         => try self.parseBool(tok),
@@ -133,7 +137,9 @@ pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
         .@"not",
         => try self.parseSymbol(tok),
         .lparen => try self.parseForm(tok),
-        .rparen => ParseError.UndexpectedRightParen,
+        .rparen => {
+            return ParseError.UndexpectedRightParen;
+        },
         else => {
             std.debug.print("UnexpectedTag: {}\n", .{tok.tag});
             return ParseError.UnexpectedTag;
@@ -218,13 +224,17 @@ pub fn parseForm(
     // push the lparen token
     try self.tokens.append(paren_tok);
 
-    const tok = self.scanner.next();
-    return switch (tok.tag) {
+    var tok = self.scanner.next();
+    const idx = switch (tok.tag) {
         .@"if" => try self.parseCond(tok),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
-        else => try self.parseCall(tok),
+        else => blk: {
+            break :blk try self.parseCall(tok);
+        },
     };
+
+    return idx;
 }
 
 /// parse a conditional statement
@@ -254,7 +264,13 @@ pub fn parseCond(
         if (else_tok.tag == .rparen) {
             break :blk 0;
         } else {
-            break :blk try self.parseExpr(else_tok);
+            const idx = try self.parseExpr(else_tok);
+            // make sure that the next token is rparen
+            if (self.scanner.next().tag != .rparen) {
+                return ParseError.ExpectedCloseParen;
+            }
+
+            break :blk idx;
         }
     };
 

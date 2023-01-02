@@ -85,9 +85,12 @@ pub const Node = struct {
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
         switch (n.tag) {
             .root => {
-                std.debug.print("<ast: \n", .{});
+                std.debug.print("<ast [{}]: \n", .{i});
                 ast.nodes[n.children.l].pprint(n.children.l, ast);
                 std.debug.print("\n>\n", .{});
+                if (n.children.r != 0) {
+                    ast.nodes[n.children.r].pprint(n.children.r, ast);
+                }
             },
             .constant => {
                 // TODO: the alignment of the value may be wrong,
@@ -107,10 +110,11 @@ pub const Node = struct {
                 std.debug.print("\n    ", .{});
                 // then
                 ast.nodes[n.children.l].pprint(n.children.l, ast);
-                std.debug.print("\n    ", .{});
-                // else
-                ast.nodes[n.children.r].pprint(n.children.r, ast);
-                // TODO: cond and stuff
+                if (n.children.r != 0) {
+                    std.debug.print("\n    ", .{});
+                    // else
+                    ast.nodes[n.children.r].pprint(n.children.r, ast);
+                }
                 std.debug.print(")", .{});
             },
             .call => {
@@ -177,12 +181,22 @@ pub fn testAst(ast: Ast, expected: []const Node) !void {
 pub fn print(ast: Ast) void {
     std.debug.print("tree:\n", .{});
     for (ast.nodes) |n, i| {
-        std.debug.print("{} {}[l: {} r: {}]\n", .{
-            i,
-            n.tag,
-            n.children.l,
-            n.children.r,
-        });
+        if (n.tag == .symbol) {
+            std.debug.print("{} {}[l: {} r: {}] ;; {s}\n", .{
+                i,
+                n.tag,
+                n.children.l,
+                n.children.r,
+                ast.tokens[n.token_idx].loc.slice,
+            });
+        } else {
+            std.debug.print("{} {}[l: {} r: {}]\n", .{
+                i,
+                n.tag,
+                n.children.l,
+                n.children.r,
+            });
+        }
     }
 }
 

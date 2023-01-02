@@ -388,7 +388,7 @@ test "divide" {
 test "if statement" {
     const code =
         \\(if #t 12 -3)
-        // \\(if #f 12 -3)
+        \\(if #f 12 -3)
     ;
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
@@ -400,14 +400,14 @@ test "if statement" {
     try testing.expect(12 == chunk.consts[1].float);
     try testing.expect(-3 == chunk.consts[2].float);
 
-    // try testing.expect(false == chunk.consts[3].boolean);
-    // try testing.expect(12 == chunk.consts[4].float);
-    // try testing.expect(-3 == chunk.consts[5].float);
+    try testing.expect(false == chunk.consts[3].boolean);
+    try testing.expect(12 == chunk.consts[4].float);
+    try testing.expect(-3 == chunk.consts[5].float);
 
     try vm.exec(&chunk);
 
     try testing.expect(vm.regs[1].float == 12);
-    // try testing.expect(vm.regs[5].float == -3);
+    try testing.expect(vm.regs[5].float == -3);
 }
 
 test "addition none" {

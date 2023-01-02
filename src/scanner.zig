@@ -497,11 +497,13 @@ pub fn testScanner(
     };
     for (strs) |str, i| {
         const t = scan.next();
-        try testing.expect(std.mem.eql(
-            u8,
-            t.loc.slice,
-            str,
-        ));
+        if (str.len > 0) {
+            try testing.expect(std.mem.eql(
+                u8,
+                t.loc.slice,
+                str,
+            ));
+        }
         try testing.expect(t.tag == tags[i]);
     }
 }
@@ -866,6 +868,41 @@ test "boolean logic" {
         .@"and",
         .@"not",
         .@"or",
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "if" {
+    const code =
+        \\(if (> 2 3) thn els)
+    ;
+
+    const expected_str = [_][]const u8{
+        "(",
+        "if",
+        "(",
+        ">",
+        "2",
+        "3",
+        ")",
+        "thn",
+        "els",
+        ")",
+        "",
+    };
+    const expected_tag = [_]Tag{
+        .lparen,
+        .@"if",
+        .lparen,
+        .gt,
+        .number,
+        .number,
+        .rparen,
+        .symbol,
+        .symbol,
+        .rparen,
+        .eof,
     };
 
     try testScanner(code, &expected_str, &expected_tag);

@@ -68,8 +68,18 @@ pub const Compiler = struct {
     /// and therefore will only produce one chunk
     pub fn compile(self: *Compiler) CompileError!void {
         // start with the root
-        const root = self.ast.nodes[0];
-        try self.evalNode(root.children.l);
+
+        var root_idx: NodeIdx = 0;
+        while (true) {
+            const root = self.ast.nodes[root_idx];
+            try self.evalNode(root.children.l);
+
+            if (root.children.r == 0) {
+                break;
+            } else {
+                root_idx = root.children.r;
+            }
+        }
 
         // push return for for the last allocated register?
         _ = try self.chunk.pushInst(Inst.init(.ret, .{

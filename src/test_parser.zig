@@ -514,3 +514,73 @@ test "call nested" {
     try std.testing.expect(ast.getData(Value, ast.nodes[9].children.l).float == 4.0);
     try std.testing.expect(ast.getData(Value, ast.nodes[11].children.l).float == 5.0);
 }
+
+test "two expressions" {
+    const code =
+        //0 1 2  3
+        \\(if x thn)
+        \\(if y aight)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    // 0        1     3  2
+    // root -> if -> thn x
+    //          |     4
+    //          |--> void
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .root,
+            .token_idx = 0,
+            .children = .{ .l = 1, .r = 4 },
+        },
+        // 1
+        .{
+            .tag = .@"if",
+            .token_idx = 1,
+            .children = .{ .l = 3, .r = 0 },
+        },
+        // 2
+        .{
+            .tag = .symbol,
+            .token_idx = 2,
+            .children = .{},
+        },
+        // 3
+        .{
+            // thn
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+        // 4
+        .{
+            .tag = .root,
+            .token_idx = 4,
+            .children = .{ .l = 5 },
+        },
+        // 5
+        .{
+            .tag = .@"if",
+            .token_idx = 5,
+            .children = .{ .l = 7, .r = 0 },
+        },
+        // 6
+        .{
+            .tag = .symbol,
+            .token_idx = 6,
+            .children = .{},
+        },
+        // 7
+        .{
+            // aight
+            .tag = .symbol,
+            .token_idx = 7,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
+}
