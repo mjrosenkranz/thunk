@@ -584,3 +584,79 @@ test "two expressions" {
     };
     try ast.testAst(&expected);
 }
+
+test "begin expression" {
+    const code =
+        \\ (begin 
+        \\    (if x thn)
+        \\    (if y aight))
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    ast.print();
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1, .r = 0 },
+        },
+
+        // 1
+        .{
+            .tag = .seq,
+            .token_idx = 1,
+            .children = .{ .l = 2, .r = 5 },
+        },
+
+        // 2
+        .{
+            .tag = .@"if",
+            .token_idx = 3,
+            .children = .{ .l = 4, .r = 0 },
+        },
+        // 3
+        .{
+            .tag = .symbol,
+            .token_idx = 4,
+            .children = .{},
+        },
+        // 4
+        .{
+            // thn
+            .tag = .symbol,
+            .token_idx = 5,
+            .children = .{},
+        },
+        // 5
+        .{
+            .tag = .seq,
+            .token_idx = 6,
+            .children = .{ .l = 6 },
+        },
+        // 6
+        .{
+            .tag = .@"if",
+            .token_idx = 7,
+            .children = .{ .l = 8, .r = 0 },
+        },
+        // 7
+        .{
+            .tag = .symbol,
+            .token_idx = 8,
+            .children = .{},
+        },
+        // 8
+        .{
+            // aight
+            .tag = .symbol,
+            .token_idx = 9,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
+}

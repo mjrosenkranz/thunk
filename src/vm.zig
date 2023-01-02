@@ -646,3 +646,25 @@ test "exec not" {
 
     try testing.expect(vm.regs[1].boolean == false);
 }
+
+test "exec begin" {
+    const code =
+        \\(begin
+        \\  (+ 2 3)
+        \\  #f)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(chunk.consts[0].float == 2);
+    try testing.expect(chunk.consts[1].float == 3);
+    try testing.expect(chunk.consts[2].boolean == false);
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.regs[1].boolean == false);
+}

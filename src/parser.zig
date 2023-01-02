@@ -227,6 +227,7 @@ pub fn parseForm(
     var tok = self.scanner.next();
     const idx = switch (tok.tag) {
         .@"if" => try self.parseCond(tok),
+        .begin => try self.parseSeq(tok),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
@@ -278,6 +279,52 @@ pub fn parseCond(
     self.nodes.items[if_idx].children.r = else_idx;
 
     return if_idx;
+}
+
+pub fn parseSeq(
+    self: *Parser,
+    begin_tok: Token,
+) ParseError!NodeIdx {
+    const begin_seq_idx = @intCast(NodeIdx, self.nodes.items.len);
+    const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len);
+    try self.tokens.append(begin_tok);
+    // try self.nodes.append(.{
+    //     .tag = .seq,
+    //     .token_idx = ,
+    //     .children = .{},
+    // });
+
+    var last_root_idx: NodeIdx = begin_seq_idx;
+    var root_idx: NodeIdx = begin_seq_idx;
+    while (true) {
+        const tok = self.scanner.next();
+        switch (tok.tag) {
+            // we at the end of the sequence
+            .rparen => {
+                break;
+            },
+            // we expect at least a right paren, this means that we have bad input
+            .eof => return ParseError.UnexpectedEof,
+            else => {
+                root_idx = @intCast(NodeIdx, self.nodes.items.len);
+                if (root_idx != begin_seq_idx) {
+                    self.nodes.items[last_root_idx].children.r = root_idx;
+                }
+                try self.nodes.append(.{
+                    .tag = .seq,
+                    .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+                    .children = .{},
+                });
+                const id = try self.parseExpr(tok);
+                // modify the root to use the new found child
+                self.nodes.items[root_idx].children = .{ .l = id };
+            },
+        }
+    }
+
+    self.nodes.items[begin_seq_idx].token_idx = begin_tok_idx;
+
+    return begin_seq_idx;
 }
 
 pub fn parseCall(
