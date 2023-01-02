@@ -406,8 +406,7 @@ test "if statement" {
 
     try vm.exec(&chunk);
 
-    try testing.expect(vm.regs[1].float == 12);
-    try testing.expect(vm.regs[5].float == -3);
+    try testing.expect(vm.regs[1].float == -3);
 }
 
 test "addition none" {

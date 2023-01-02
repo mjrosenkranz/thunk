@@ -94,7 +94,7 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
             self.nodes.items[last_root_idx].children.r = root_idx;
         }
         try self.nodes.append(.{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = @intCast(NodeIdx, self.tokens.items.len),
             .children = .{},
         });

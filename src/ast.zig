@@ -54,10 +54,14 @@ pub const Node = struct {
     };
 
     pub const Tag = enum {
-        /// the root of the tree
-        /// l points to the subtree, the child
-        /// TODO: r points to the next root, if there is one?
-        root,
+        /// defines a sequence of expressions to be evaluated
+        /// the value of the last one is the value of the
+        /// whole expression
+        /// l points to expression
+        /// r points to the next sequence, if there is one
+        /// This is similar to the pairs below but a separate, more
+        /// specific use case
+        seq,
         /// a constant value like a number or interned string
         /// the left child is the byte offset of the constant's
         /// value in the data list
@@ -84,13 +88,23 @@ pub const Node = struct {
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
         switch (n.tag) {
-            .root => {
-                std.debug.print("<ast [{}]: \n", .{i});
-                ast.nodes[n.children.l].pprint(n.children.l, ast);
-                std.debug.print("\n>\n", .{});
-                if (n.children.r != 0) {
-                    ast.nodes[n.children.r].pprint(n.children.r, ast);
+            .seq => {
+                std.debug.print("(seq \n", .{});
+
+                var seq_idx: NodeIdx = i;
+
+                while (true) {
+                    const seq = ast.nodes[seq_idx];
+                    ast.nodes[seq.children.l].pprint(seq.children.l, ast);
+                    if (seq.children.r == 0) {
+                        break;
+                    } else {
+                        std.debug.print("\n", .{});
+                        seq_idx = seq.children.r;
+                    }
                 }
+
+                std.debug.print(")\n", .{});
             },
             .constant => {
                 // TODO: the alignment of the value may be wrong,

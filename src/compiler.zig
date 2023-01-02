@@ -68,19 +68,7 @@ pub const Compiler = struct {
     /// and therefore will only produce one chunk
     pub fn compile(self: *Compiler) CompileError!void {
         // start with the root
-
-        var root_idx: NodeIdx = 0;
-        while (true) {
-            const root = self.ast.nodes[root_idx];
-            try self.evalNode(root.children.l);
-
-            if (root.children.r == 0) {
-                break;
-            } else {
-                root_idx = root.children.r;
-            }
-        }
-
+        try self.evalNode(0);
         // push return for for the last allocated register?
         _ = try self.chunk.pushInst(Inst.init(.ret, .{
             .r = self.last_reg,
@@ -105,9 +93,31 @@ pub const Compiler = struct {
                     },
                 ));
             },
+            .seq => try self.evalSequence(idx),
             .@"if" => try self.compileCond(idx),
             .call => try self.applyNode(idx),
             else => return CompileError.NotYetImplemented,
+        }
+    }
+
+    fn evalSequence(
+        self: *Compiler,
+        idx: NodeIdx,
+    ) CompileError!void {
+        var seq_idx: NodeIdx = idx;
+
+        while (true) {
+            const seq = self.ast.nodes[seq_idx];
+            try self.evalNode(seq.children.l);
+
+            if (seq.children.r == 0) {
+                break;
+            } else {
+                // since there is another value,
+                // we should free this register
+                self.freeReg();
+                seq_idx = seq.children.r;
+            }
         }
     }
 
@@ -350,7 +360,7 @@ pub const Compiler = struct {
         const done_idx = self.chunk.n_inst - 1;
         for (self.chunk.code[start_idx..done_idx]) |*jmp, i| {
             if (jmp.op == .jmp) {
-                const jmp_amt = @intCast(inst.ArgI, done_idx - i);
+                const jmp_amt = @intCast(inst.ArgI, done_idx - (start_idx + i));
                 jmp.data = jmp_amt;
             }
         }
@@ -463,8 +473,6 @@ test "primitive call" {
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
 
-    chunk.disassemble();
-
     try testing.expectEqualSlices(Inst, &.{
         // load 1 into 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -480,28 +488,6 @@ test "primitive call" {
 test "and" {
     const code =
         \\(and #t 33)
-    ;
-
-    var env = Env.init(testing.allocator);
-    defer env.deinit();
-    var chunk = try compile(code, &env, std.testing.allocator);
-
-    try testing.expectEqualSlices(Inst, &.{
-        // load arg1 into reg1
-        Inst.init(.load, .{ .r = 1, .u = 0 }),
-        // test if reg1 is false, and store in reg 1
-        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
-        // if we are at this instruction then r1 was false and we are done
-        Inst.init(.jmp, 1),
-        // load arg2 into reg1
-        Inst.init(.load, .{ .r = 1, .u = 1 }),
-        // return
-        Inst.init(.ret, .{ .r = 1 }),
-    }, chunk.code[0..chunk.n_inst]);
-}
-
-test "and short circuit" {
-    const code =
         \\(and #t 33 #f)
     ;
 
@@ -509,23 +495,30 @@ test "and short circuit" {
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
 
-    chunk.disassemble();
-
     try testing.expectEqualSlices(Inst, &.{
         // load arg1 into reg1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // test if reg1 is false, and store in reg 1
         Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
         // if we are at this instruction then r1 was false and we are done
-        Inst.init(.jmp, 4),
+        Inst.init(.jmp, 1),
         // load arg2 into reg1
         Inst.init(.load, .{ .r = 1, .u = 1 }),
+
+        // load arg1 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 2 }),
+        // test if reg1 is false, and store in reg 1
+        Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
+        // if we are at this instruction then r1 was false and we are done
+        Inst.init(.jmp, 4),
+        // load arg2 into reg1
+        Inst.init(.load, .{ .r = 1, .u = 3 }),
         // test if reg1 is false, and store in reg 1
         Inst.init(.@"test", .{ .r = 1, .r1 = 1, .r2 = 0 }),
         // if we are at this instruction then r1 was false and we are done
         Inst.init(.jmp, 1),
         // load arg3 into reg1
-        Inst.init(.load, .{ .r = 1, .u = 2 }),
+        Inst.init(.load, .{ .r = 1, .u = 4 }),
 
         // return
         Inst.init(.ret, .{ .r = 1 }),

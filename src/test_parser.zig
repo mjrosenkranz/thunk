@@ -18,7 +18,7 @@ test "const" {
     // root -> const
     const expected = [_]Node{
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -54,7 +54,7 @@ test "if" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -141,7 +141,7 @@ test "if no else" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -180,7 +180,7 @@ test "call no args" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -228,7 +228,7 @@ test "call one arg" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -275,7 +275,7 @@ test "call two args" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -339,7 +339,7 @@ test "call many" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -429,7 +429,7 @@ test "call nested" {
     //                                            |--> [ 5 |   ]
     const expected = [_]Node{
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1 },
         },
@@ -533,7 +533,7 @@ test "two expressions" {
     const expected = [_]Node{
         // 0
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 0,
             .children = .{ .l = 1, .r = 4 },
         },
@@ -558,7 +558,7 @@ test "two expressions" {
         },
         // 4
         .{
-            .tag = .root,
+            .tag = .seq,
             .token_idx = 4,
             .children = .{ .l = 5 },
         },
