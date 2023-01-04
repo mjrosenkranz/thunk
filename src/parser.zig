@@ -30,8 +30,16 @@ allocator: Allocator,
 /// scanner for getting source code
 scanner: Scanner,
 
+/// previously visited token
+prev: Token,
+
+/// token we are currently checkin out
+curr: Token,
+
 pub fn init(allocator: Allocator) Parser {
     return Parser{
+        .curr = undefined,
+        .prev = undefined,
         .allocator = allocator,
         .tokens = TokenList.init(allocator),
         .nodes = NodeList.init(allocator),
@@ -44,6 +52,27 @@ pub fn deinit(self: *Parser) void {
     self.nodes.deinit();
     self.tokens.deinit();
     self.data.deinit();
+}
+
+/// gets us the next token in current and saves the previous
+pub fn advance(self: *Parser) void {
+    self.prev = self.curr;
+    self.curr = self.scanner.next();
+}
+
+/// shorthand for if the current token tag is expected
+pub inline fn match(self: Parser, tag: Token.Tag) bool {
+    return self.curr.tag == tag;
+}
+
+/// we expect the current token to have tag, if not we throw err
+pub fn consume(self: *Parser, tag: Token.Tag, err: ParseError) ParseError!void {
+    if (self.match(tag)) {
+        try self.tokens.append(self.curr);
+        self.advance();
+        return;
+    }
+    return err;
 }
 
 pub fn pushData(
@@ -74,6 +103,7 @@ pub const ParseError = error{
     UnexpectedTag,
     UnexpectedEof,
     ExpectedCloseParen,
+    ExpectedNumber,
 
     SyntaxError,
 } || Allocator.Error;
@@ -85,10 +115,10 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
     self.scanner = Scanner{
         .buf = src,
     };
-    var tok = self.scanner.next();
+    self.advance();
     var last_root_idx: NodeIdx = 0;
     var root_idx: NodeIdx = 0;
-    while (tok.tag != .eof) : (tok = self.scanner.next()) {
+    while (!self.match(.eof)) : (self.advance()) {
         root_idx = @intCast(NodeIdx, self.nodes.items.len);
         if (root_idx != 0) {
             self.nodes.items[last_root_idx].children.r = root_idx;
@@ -98,7 +128,7 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
             .token_idx = @intCast(NodeIdx, self.tokens.items.len),
             .children = .{},
         });
-        const id = try self.parseExpr(tok);
+        const id = try self.parseExpr();
         // modify the root to use the new found child
         self.nodes.items[root_idx].children = .{ .l = id };
     }
@@ -113,14 +143,14 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
 /// this is the first stop in our parsing journey.
 /// here we parse the top level statements.
 /// This should be just one when we are just inside a single sexpr
-pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
+pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
     // we done!
-    if (tok.tag == .eof) return 0;
-    return switch (tok.tag) {
-        .number => try self.parseNum(tok),
+    if (self.curr.tag == .eof) return 0;
+    return switch (self.curr.tag) {
+        .number => try self.parseNum(),
         .@"false",
         .@"true",
-        => try self.parseBool(tok),
+        => try self.parseBool(),
         // these are all builtin symbols
         .plus,
         .minus,
@@ -135,13 +165,13 @@ pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
         .@"and",
         .@"or",
         .@"not",
-        => try self.parseSymbol(tok),
-        .lparen => try self.parseForm(tok),
+        => try self.parseSymbol(),
+        .lparen => try self.parseForm(),
         .rparen => {
             return ParseError.UndexpectedRightParen;
         },
         else => {
-            std.debug.print("UnexpectedTag: {}\n", .{tok.tag});
+            std.debug.print("UnexpectedTag: {}\n", .{self.curr.tag});
             return ParseError.UnexpectedTag;
         },
     };
@@ -150,17 +180,16 @@ pub fn parseExpr(self: *Parser, tok: Token) ParseError!NodeIdx {
 // TODO: parse other kinds of numbers
 pub fn parseNum(
     self: *Parser,
-    tok: Token,
 ) ParseError!NodeIdx {
     // try to parse the number
-    const f = std.fmt.parseFloat(f32, tok.loc.slice) catch {
+    const f = std.fmt.parseFloat(f32, self.curr.loc.slice) catch {
         return ParseError.SyntaxError;
     };
     const data_idx = try self.pushData(Value, .{ .float = f });
 
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
-    try self.tokens.append(tok);
+    try self.tokens.append(self.curr);
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -175,14 +204,13 @@ pub fn parseNum(
 
 pub fn parseBool(
     self: *Parser,
-    tok: Token,
 ) ParseError!NodeIdx {
-    var b: bool = tok.tag == .@"true";
+    var b: bool = self.curr.tag == .@"true";
     const data_idx = try self.pushData(Value, .{ .boolean = b });
 
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
-    try self.tokens.append(tok);
+    try self.tokens.append(self.curr);
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -197,14 +225,13 @@ pub fn parseBool(
 
 pub fn parseSymbol(
     self: *Parser,
-    tok: Token,
 ) ParseError!NodeIdx {
     // TODO: what data does a symbol have
     // const data_idx = try self.pushData(Value, .{ .float = f });
 
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
-    try self.tokens.append(tok);
+    try self.tokens.append(self.curr);
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -219,19 +246,18 @@ pub fn parseSymbol(
 
 pub fn parseForm(
     self: *Parser,
-    paren_tok: Token,
 ) ParseError!NodeIdx {
     // push the lparen token
-    try self.tokens.append(paren_tok);
+    try self.tokens.append(self.curr);
 
-    var tok = self.scanner.next();
-    const idx = switch (tok.tag) {
-        .@"if" => try self.parseCond(tok),
-        .begin => try self.parseSeq(tok),
+    self.advance();
+    const idx = switch (self.curr.tag) {
+        .@"if" => try self.parseCond(),
+        .begin => try self.parseSeq(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
-            break :blk try self.parseCall(tok);
+            break :blk try self.parseCall();
         },
     };
 
@@ -242,7 +268,6 @@ pub fn parseForm(
 /// for now, this is just an if statement
 pub fn parseCond(
     self: *Parser,
-    if_tok: Token,
 ) ParseError!NodeIdx {
 
     // save this for later when we have to patch the then and else branches
@@ -254,20 +279,24 @@ pub fn parseCond(
         // INVARIANT: the latest token should be the lparen
         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
     });
-    try self.tokens.append(if_tok);
+    try self.tokens.append(self.curr);
 
     // parse the cond expression
-    _ = try self.parseExpr(self.scanner.next());
+    self.advance();
+    _ = try self.parseExpr();
 
-    const then_idx = try self.parseExpr(self.scanner.next());
+    self.advance();
+    const then_idx = try self.parseExpr();
     const else_idx = blk: {
-        const else_tok = self.scanner.next();
+        self.advance();
+        const else_tok = self.curr;
         if (else_tok.tag == .rparen) {
             break :blk 0;
         } else {
-            const idx = try self.parseExpr(else_tok);
+            const idx = try self.parseExpr();
             // make sure that the next token is rparen
-            if (self.scanner.next().tag != .rparen) {
+            self.advance();
+            if (!self.match(.rparen)) {
                 return ParseError.ExpectedCloseParen;
             }
 
@@ -283,11 +312,10 @@ pub fn parseCond(
 
 pub fn parseSeq(
     self: *Parser,
-    begin_tok: Token,
 ) ParseError!NodeIdx {
     const begin_seq_idx = @intCast(NodeIdx, self.nodes.items.len);
     const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len);
-    try self.tokens.append(begin_tok);
+    try self.tokens.append(self.curr);
     // try self.nodes.append(.{
     //     .tag = .seq,
     //     .token_idx = ,
@@ -297,8 +325,8 @@ pub fn parseSeq(
     var last_root_idx: NodeIdx = begin_seq_idx;
     var root_idx: NodeIdx = begin_seq_idx;
     while (true) {
-        const tok = self.scanner.next();
-        switch (tok.tag) {
+        self.advance();
+        switch (self.curr.tag) {
             // we at the end of the sequence
             .rparen => {
                 break;
@@ -315,7 +343,7 @@ pub fn parseSeq(
                     .token_idx = @intCast(NodeIdx, self.tokens.items.len),
                     .children = .{},
                 });
-                const id = try self.parseExpr(tok);
+                const id = try self.parseExpr();
                 // modify the root to use the new found child
                 self.nodes.items[root_idx].children = .{ .l = id };
             },
@@ -329,7 +357,6 @@ pub fn parseSeq(
 
 pub fn parseCall(
     self: *Parser,
-    caller_tok: Token,
 ) ParseError!NodeIdx {
     // create call node
     const call_idx = @intCast(NodeIdx, self.nodes.items.len);
@@ -342,7 +369,7 @@ pub fn parseCall(
     });
 
     // get the thing we are calling
-    const caller = try self.parseExpr(caller_tok);
+    const caller = try self.parseExpr();
 
     // we start making a list by creating the first pair
     var pair_idx = @intCast(NodeIdx, self.nodes.items.len);
@@ -357,9 +384,9 @@ pub fn parseCall(
     var n_args: u8 = 0;
 
     while (true) {
-        const tok = self.scanner.next();
+        self.advance();
 
-        switch (tok.tag) {
+        switch (self.curr.tag) {
             // we at the end of the list
             .rparen => {
                 // finish this pair
@@ -386,7 +413,7 @@ pub fn parseCall(
                     }
                 }
 
-                const n_idx = try self.parseExpr(tok);
+                const n_idx = try self.parseExpr();
                 self.nodes.items[pair_idx].children.l = n_idx;
                 self.nodes.items[pair_idx].token_idx = self.nodes.items[n_idx].token_idx;
                 n_args += 1;
