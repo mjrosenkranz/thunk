@@ -26,30 +26,63 @@ pub const ObjType = enum {
 /// change?
 pub const MAX_ARGS = 32;
 
+const CallFn = *const fn (self: NativeFnDef, args: []const Obj) Obj;
+
 pub const NativeFnDef = struct {
     args: [MAX_ARGS]ObjType = undefined,
     n_args: u8 = 0,
-    ptr: *const anyopaque = undefined,
+    ptr: CallFn = undefined,
 
-    var F: type = undefined;
-
-    pub fn call(f: @This(), args: []Obj) void {
-        std.debug.assert(f.n_args == args.len);
-        @call(.{}, F, .{inline for (f.args) |arg_t, i| {
-            args[i].untag(arg_t);
-        }});
+    pub fn call(self: @This(), args: []const Obj) Obj {
+        return self.ptr(self, args);
     }
 };
 
-fn defn(comptime f: anytype) void {
+const nums = [_][]const u8{
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+    "32",
+};
+
+fn defn(comptime f: anytype) NativeFnDef {
     // make sure this is a function
     // throw compile error if not?
     // add to a list of provided functions
     const F = @TypeOf(f);
-    const info = @typeInfo(F);
+    const info = @typeInfo(F).Fn;
 
     var def = NativeFnDef{};
-    comptime for (info.Fn.args) |p, i| {
+    comptime for (info.args) |p, i| {
         if (p.arg_type) |T| {
             def.args[i] = switch (@typeInfo(T)) {
                 .Float => ObjType.num,
@@ -58,6 +91,40 @@ fn defn(comptime f: anytype) void {
             def.n_args += 1;
         }
     };
+
+    const closure = struct {
+        fn func(d: NativeFnDef, args: []const Obj) Obj {
+            std.debug.assert(d.n_args == args.len);
+
+            comptime var fields: [info.args.len]std.builtin.Type.StructField = undefined;
+            inline for (info.args) |arg, i| {
+                fields[i] = std.builtin.Type.StructField{
+                    .name = nums[i],
+                    .field_type = arg.arg_type.?,
+                    .is_comptime = true,
+                    .default_value = null,
+                    .alignment = @alignOf(arg.arg_type.?),
+                };
+            }
+            const st = std.builtin.Type{
+                .Struct = .{
+                    .layout = .Auto,
+                    .fields = &fields,
+                    .decls = &[_]std.builtin.Type.Declaration{},
+                    .is_tuple = true,
+                },
+            };
+
+            const T = @Type(st);
+            var t: T = undefined;
+            inline for (std.meta.fields(T)) |fi, i| {
+                @field(t, fi.name) = args[i];
+            }
+
+            return @call(.{}, f, t);
+        }
+    };
+    def.ptr = closure.func;
 
     return def;
 }
@@ -69,5 +136,11 @@ fn add(a: Obj, b: Obj) Obj {
 }
 
 test "defn" {
-    std.debug.print("{}\n", .{defn(add)});
+    const f = defn(add);
+    std.debug.print("{}\n", .{f.call(&.{ 32.0, 55.0 })});
+    // const info = @typeInfo(@TypeOf(.{ 32, 44 })).Struct;
+    // std.debug.print("{}\n", .{info.is_tuple});
+    // inline for (info.fields) |f| {
+    //     std.debug.print("{s}: {}\n", .{ f.name, f.field_type });
+    // }
 }
