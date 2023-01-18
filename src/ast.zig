@@ -227,7 +227,8 @@ pub fn printTokens(ast: Ast) void {
     }
 }
 
-// TODO: should this go somewhere else?
+// Data for nodes that doesn't fit into them
+
 pub const FnCall = packed struct {
     /// number of arguments given to this call
     n_args: NodeIdx,

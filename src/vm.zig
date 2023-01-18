@@ -668,3 +668,90 @@ test "exec begin" {
 
     try testing.expect(vm.regs[1].boolean == false);
 }
+
+const Interp = struct {
+    /// index of current instruction
+    pc: usize,
+    /// indices of the instructions to use
+    inds: []const u8,
+    /// arguments to those instructions
+    /// should be same size as inds
+    args: []const u32,
+    /// the value this returns
+    ret: u32,
+};
+
+const InstFn = *const fn (interp: *Interp) void;
+const inst_fns = [_]InstFn{
+    &exec,
+    &add,
+    &sub,
+};
+
+fn exec(interp: *Interp) void {
+    if (interp.pc >= interp.inds.len) return;
+
+    const fidx = interp.inds[interp.pc];
+    return inst_fns[fidx](interp);
+}
+
+fn add(interp: *Interp) void {
+    interp.ret = interp.ret + interp.args[interp.pc];
+    interp.pc += 1;
+    return inst_fns[0](interp);
+}
+
+fn sub(interp: *Interp) void {
+    interp.ret = interp.ret - interp.args[interp.pc];
+    interp.pc += 1;
+    return inst_fns[0](interp);
+}
+
+test "fast interp" {
+    var interp = Interp{
+        .pc = 0,
+        .ret = 0,
+        .inds = &[_]u8{
+            // add
+            1,
+            // add
+            1,
+            // add
+            2,
+        },
+        .args = &[_]u32{
+            // first argument is 5
+            5,
+            // second argument is 7
+            7,
+            // second argument is 2
+            2,
+        },
+    };
+
+    exec(&interp);
+
+    try std.testing.expect(interp.ret == 10);
+}
+
+test "taged goto" {
+    const I = enum {
+        add,
+        sub,
+    };
+
+    const insts = &[_]I{
+        .add,
+        .sub,
+    };
+
+    var pc = 0;
+    var i = insts[i];
+    while (true) : (pc += 1) {
+        i = switch (i) {
+
+        };
+    }
+
+}
+
