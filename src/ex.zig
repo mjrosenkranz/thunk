@@ -19,21 +19,17 @@ const std = @import("std");
 //     };
 // };
 
-pub const ObjType = enum {
-    num,
-};
-
 /// change?
 pub const MAX_ARGS = 32;
 
-const CallFn = *const fn (self: NativeFnDef, args: []const Obj) Obj;
+const CallFn = *const fn (self: NativeFnDef, args: []const Obj) ?Obj;
 
 pub const NativeFnDef = struct {
     args: [MAX_ARGS]ObjType = undefined,
     n_args: u8 = 0,
     ptr: CallFn = undefined,
 
-    pub fn call(self: @This(), args: []const Obj) Obj {
+    pub fn call(self: @This(), args: []const Obj) ?Obj {
         return self.ptr(self, args);
     }
 };
@@ -85,7 +81,8 @@ fn defn(comptime f: anytype) NativeFnDef {
     comptime for (info.args) |p, i| {
         if (p.arg_type) |T| {
             def.args[i] = switch (@typeInfo(T)) {
-                .Float => ObjType.num,
+                .Float => .float,
+                .Bool => .boolean,
                 else => @compileError("unsupported native type"),
             };
             def.n_args += 1;
@@ -93,7 +90,7 @@ fn defn(comptime f: anytype) NativeFnDef {
     };
 
     const closure = struct {
-        fn func(d: NativeFnDef, args: []const Obj) Obj {
+        fn func(d: NativeFnDef, args: []const Obj) ?Obj {
             std.debug.assert(d.n_args == args.len);
 
             comptime var fields: [info.args.len]std.builtin.Type.StructField = undefined;
@@ -118,10 +115,15 @@ fn defn(comptime f: anytype) NativeFnDef {
             const T = @Type(st);
             var t: T = undefined;
             inline for (std.meta.fields(T)) |fi, i| {
-                @field(t, fi.name) = args[i];
+                @field(t, fi.name) = args[i].to(fi.field_type).?;
             }
 
-            return @call(.{}, f, t);
+            const ret = Obj.from(@call(.{}, f, t));
+            if (info.return_type == void) {
+                return null;
+            } else {
+                return ret;
+            }
         }
     };
     def.ptr = closure.func;
@@ -129,15 +131,86 @@ fn defn(comptime f: anytype) NativeFnDef {
     return def;
 }
 
-const Obj = f32;
+const HeapObjType = enum {};
 
-fn add(a: Obj, b: Obj) Obj {
+const HeapObj = struct {
+    tag: HeapObjType,
+};
+
+pub const ObjType = enum(u8) {
+    empty,
+    float,
+    boolean,
+    heap,
+};
+
+pub const Obj = packed struct(u64) {
+    /// opaque data of the object
+    data: u56 = 0,
+    /// the type of the object
+    tag: ObjType,
+
+    pub fn from(o: anytype) Obj {
+        const T = @TypeOf(o);
+        return switch (T) {
+            comptime_float,
+            f32,
+            => .{
+                .tag = .float,
+                .data = @as(u56, @bitCast(u32, @as(f32, o))),
+            },
+            bool => .{
+                .tag = .boolean,
+                .data = @as(u56, @boolToInt(o)),
+            },
+            void => {
+                return .{ .tag = .empty };
+            },
+            else => {
+                std.debug.print("\ninvalid type {}!\n", .{T});
+                unreachable;
+            },
+        };
+    }
+
+    pub fn to(o: @This(), comptime T: type) ?T {
+        switch (T) {
+            f32 => {
+                if (o.tag == .float) {
+                    return @bitCast(f32, @truncate(u32, o.data));
+                }
+            },
+            bool => {
+                if (o.tag == .boolean) {
+                    return o.data == 1;
+                }
+            },
+            else => {
+                std.debug.print("\ninvalid type {}!\n", .{T});
+                unreachable;
+            },
+        }
+
+        return null;
+    }
+};
+
+fn add(a: f32, b: f32) f32 {
     return a + b;
+}
+
+fn effect(a: bool) void {
+    std.debug.print("effect: {}\n", .{a});
 }
 
 test "defn" {
     const f = defn(add);
-    std.debug.print("{}\n", .{f.call(&.{ 32.0, 55.0 })});
+    const ret = f.call(&.{ Obj.from(32.0), Obj.from(55.0) }).?;
+    try std.testing.expect(ret.to(f32) == @as(f32, 87.0));
+
+    const f2 = defn(effect);
+    try std.testing.expect(f2.call(&.{Obj.from(false)}) == null);
+
     // const info = @typeInfo(@TypeOf(.{ 32, 44 })).Struct;
     // std.debug.print("{}\n", .{info.is_tuple});
     // inline for (info.fields) |f| {
