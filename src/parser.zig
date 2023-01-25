@@ -55,7 +55,7 @@ pub fn deinit(self: *Parser) void {
 }
 
 /// gets us the next token in current and saves the previous
-pub fn advance(self: *Parser) void {
+pub inline fn advance(self: *Parser) void {
     self.prev = self.curr;
     self.curr = self.scanner.next();
 }
@@ -66,12 +66,14 @@ pub inline fn match(self: Parser, tag: Token.Tag) bool {
 }
 
 /// we expect the current token to have tag, if not we throw err
-pub fn consume(self: *Parser, tag: Token.Tag, err: ParseError) ParseError!void {
+pub inline fn consume(self: *Parser, tag: Token.Tag, err: ParseError) ParseError!void {
     if (self.match(tag)) {
         try self.tokens.append(self.curr);
         self.advance();
         return;
     }
+
+    std.debug.print("expected: {} got {}\n", .{ tag, self.curr.tag });
     return err;
 }
 
@@ -104,6 +106,7 @@ pub const ParseError = error{
     UnexpectedEof,
     ExpectedCloseParen,
     ExpectedNumber,
+    FormFailed,
 
     SyntaxError,
 } || Allocator.Error;
@@ -254,12 +257,40 @@ pub fn parseForm(
     const idx = switch (self.curr.tag) {
         .@"if" => try self.parseCond(),
         .begin => try self.parseSeq(),
+        .define => try self.parseDefine(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
             break :blk try self.parseCall();
         },
     };
+
+    return idx;
+}
+
+pub fn parseDefine(
+    self: *Parser,
+) ParseError!NodeIdx {
+    // we know curr is define so we can advance
+    self.advance();
+    // add define node
+    const idx = @intCast(NodeIdx, self.nodes.items.len);
+    try self.nodes.append(.{
+        .tag = .define,
+        .children = .{},
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    try self.tokens.append(self.curr);
+
+    // this should be a symbol
+    self.nodes.items[idx].children.l = try self.parseSymbol();
+    self.advance();
+
+    // evaluate the body
+    self.nodes.items[idx].children.r = try self.parseExpr();
+    self.advance();
+
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return idx;
 }

@@ -80,10 +80,12 @@ pub const Node = struct {
         /// if r is zero wer're at the end of the list
         pair,
         /// an if statement
-        /// ASSUMTION: the condition is the next node in the tree list
+        /// INVARIANT: the condition is the next node in the tree list
         /// l is the then branch
         /// r is the else branch
         @"if",
+        /// define a global variable
+        define,
     };
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
@@ -147,6 +149,9 @@ pub const Node = struct {
                     std.debug.print(" ", .{});
                     ast.nodes[n.children.r].pprint(n.children.r, ast);
                 }
+            },
+            .define => {
+                std.debug.print("define ", .{});
             },
         }
     }

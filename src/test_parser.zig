@@ -596,8 +596,6 @@ test "begin expression" {
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
 
-    ast.print();
-
     const expected = [_]Node{
         // 0
         .{
@@ -658,5 +656,47 @@ test "begin expression" {
             .children = .{},
         },
     };
+    try ast.testAst(&expected);
+}
+
+test "simple define" {
+    const code =
+        \\(define x 55)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .define,
+            .token_idx = 1,
+            .children = .{
+                .l = 2,
+                .r = 3,
+            },
+        },
+        // 2
+        .{
+            .tag = .symbol,
+            .token_idx = 2,
+            .children = .{},
+        },
+        // 3
+        .{
+            .tag = .constant,
+            .token_idx = 3,
+            .children = .{ .l = 0 * @sizeOf(Value) },
+        },
+    };
+    ast.printTokens();
+    ast.print();
     try ast.testAst(&expected);
 }
