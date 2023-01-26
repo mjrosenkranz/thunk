@@ -15,6 +15,22 @@ const NodeList = std.ArrayList(Node);
 const TokenList = std.ArrayList(Token);
 const NodeDataList = std.ArrayListAligned(u8, DATA_ALIGN);
 
+const MAX_ARGS = 256;
+
+pub const ParseError = error{
+    UnexpectedCloseParen,
+    UnexpectedTag,
+    UnexpectedEof,
+    ExpectedOpenParen,
+    ExpectedCloseParen,
+    ExpectedNumber,
+    FormFailed,
+    ExceededMaxArgs,
+    ExpectedBegin,
+
+    SyntaxError,
+} || Allocator.Error;
+
 /// all the nodes in this tree
 nodes: NodeList,
 
@@ -100,17 +116,6 @@ pub fn pushData(
     return idx;
 }
 
-pub const ParseError = error{
-    UndexpectedRightParen,
-    UnexpectedTag,
-    UnexpectedEof,
-    ExpectedCloseParen,
-    ExpectedNumber,
-    FormFailed,
-
-    SyntaxError,
-} || Allocator.Error;
-
 /// Parse the whole source into a tree
 pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
     // TODO: ensure capacity so that we dont need try everywhere
@@ -171,7 +176,7 @@ pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
         => try self.parseSymbol(),
         .lparen => try self.parseForm(),
         .rparen => {
-            return ParseError.UndexpectedRightParen;
+            return ParseError.UnexpectedCloseParen;
         },
         else => {
             std.debug.print("UnexpectedTag: {}\n", .{self.curr.tag});
@@ -192,7 +197,7 @@ pub fn parseNum(
 
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
-    try self.tokens.append(self.curr);
+    try self.consume(.number, ParseError.ExpectedNumber);
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -235,6 +240,9 @@ pub fn parseSymbol(
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
     try self.tokens.append(self.curr);
+    // need this advance because symbol could be something other
+    // than a symbol
+    self.advance();
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -251,9 +259,8 @@ pub fn parseForm(
     self: *Parser,
 ) ParseError!NodeIdx {
     // push the lparen token
-    try self.tokens.append(self.curr);
+    try self.consume(.lparen, ParseError.ExpectedOpenParen);
 
-    self.advance();
     const idx = switch (self.curr.tag) {
         .@"if" => try self.parseCond(),
         .begin => try self.parseSeq(),
@@ -271,8 +278,6 @@ pub fn parseForm(
 pub fn parseDefine(
     self: *Parser,
 ) ParseError!NodeIdx {
-    // we know curr is define so we can advance
-    self.advance();
     // add define node
     const idx = @intCast(NodeIdx, self.nodes.items.len);
     try self.nodes.append(.{
@@ -280,15 +285,13 @@ pub fn parseDefine(
         .children = .{},
         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
     });
-    try self.tokens.append(self.curr);
+    try self.consume(.define, error.FormFailed);
 
     // this should be a symbol
     self.nodes.items[idx].children.l = try self.parseSymbol();
-    self.advance();
 
     // evaluate the body
     self.nodes.items[idx].children.r = try self.parseExpr();
-    self.advance();
 
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
@@ -310,33 +313,25 @@ pub fn parseCond(
         // INVARIANT: the latest token should be the lparen
         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
     });
-    try self.tokens.append(self.curr);
+    try self.consume(.@"if", ParseError.ExpectedIf);
 
-    // parse the cond expression
-    self.advance();
+    // cond
     _ = try self.parseExpr();
 
-    self.advance();
     const then_idx = try self.parseExpr();
     const else_idx = blk: {
-        self.advance();
         const else_tok = self.curr;
         if (else_tok.tag == .rparen) {
             break :blk 0;
         } else {
             const idx = try self.parseExpr();
-            // make sure that the next token is rparen
-            self.advance();
-            if (!self.match(.rparen)) {
-                return ParseError.ExpectedCloseParen;
-            }
-
             break :blk idx;
         }
     };
 
     self.nodes.items[if_idx].children.l = then_idx;
     self.nodes.items[if_idx].children.r = else_idx;
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return if_idx;
 }
@@ -346,7 +341,7 @@ pub fn parseSeq(
 ) ParseError!NodeIdx {
     const begin_seq_idx = @intCast(NodeIdx, self.nodes.items.len);
     const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len);
-    try self.tokens.append(self.curr);
+    try self.consume(.begin, ParseError.ExpectedBegin);
     // try self.nodes.append(.{
     //     .tag = .seq,
     //     .token_idx = ,
@@ -356,7 +351,8 @@ pub fn parseSeq(
     var last_root_idx: NodeIdx = begin_seq_idx;
     var root_idx: NodeIdx = begin_seq_idx;
     while (true) {
-        self.advance();
+        std.debug.print("c_tag: \n", .{});
+        self.curr.print();
         switch (self.curr.tag) {
             // we at the end of the sequence
             .rparen => {
@@ -382,6 +378,7 @@ pub fn parseSeq(
     }
 
     self.nodes.items[begin_seq_idx].token_idx = begin_tok_idx;
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return begin_seq_idx;
 }
@@ -415,8 +412,6 @@ pub fn parseCall(
     var n_args: u8 = 0;
 
     while (true) {
-        self.advance();
-
         switch (self.curr.tag) {
             // we at the end of the list
             .rparen => {
@@ -450,6 +445,9 @@ pub fn parseCall(
                 n_args += 1;
             },
         }
+        if (n_args >= MAX_ARGS) {
+            return ParseError.ExceededMaxArgs;
+        }
     }
 
     // now that we have the arguments list setup, we can create function data
@@ -459,6 +457,8 @@ pub fn parseCall(
     });
     // and set the right child to the index
     self.nodes.items[call_idx].children.l = data_idx;
+
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return call_idx;
 }

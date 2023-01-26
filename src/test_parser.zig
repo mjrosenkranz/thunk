@@ -107,14 +107,14 @@ test "if" {
         .{
             // thn
             .tag = .symbol,
-            .token_idx = 6,
+            .token_idx = 7,
             .children = .{},
         },
         // 9
         .{
             // els
             .tag = .symbol,
-            .token_idx = 7,
+            .token_idx = 8,
             .children = .{},
         },
     };
@@ -595,6 +595,8 @@ test "begin expression" {
     defer parser.deinit();
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
+    ast.printTokens();
+    ast.pprint();
 
     const expected = [_]Node{
         // 0
@@ -633,26 +635,26 @@ test "begin expression" {
         // 5
         .{
             .tag = .seq,
-            .token_idx = 6,
+            .token_idx = 7,
             .children = .{ .l = 6 },
         },
         // 6
         .{
             .tag = .@"if",
-            .token_idx = 7,
+            .token_idx = 8,
             .children = .{ .l = 8, .r = 0 },
         },
         // 7
         .{
             .tag = .symbol,
-            .token_idx = 8,
+            .token_idx = 9,
             .children = .{},
         },
         // 8
         .{
             // aight
             .tag = .symbol,
-            .token_idx = 9,
+            .token_idx = 10,
             .children = .{},
         },
     };
