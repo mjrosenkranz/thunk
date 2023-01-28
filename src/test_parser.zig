@@ -526,6 +526,8 @@ test "two expressions" {
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
 
+    ast.pprint();
+
     // 0        1     3  2
     // root -> if -> thn x
     //          |     4
@@ -559,26 +561,26 @@ test "two expressions" {
         // 4
         .{
             .tag = .seq,
-            .token_idx = 4,
+            .token_idx = 5,
             .children = .{ .l = 5 },
         },
         // 5
         .{
             .tag = .@"if",
-            .token_idx = 5,
+            .token_idx = 6,
             .children = .{ .l = 7, .r = 0 },
         },
         // 6
         .{
             .tag = .symbol,
-            .token_idx = 6,
+            .token_idx = 7,
             .children = .{},
         },
         // 7
         .{
             // aight
             .tag = .symbol,
-            .token_idx = 7,
+            .token_idx = 8,
             .children = .{},
         },
     };
@@ -595,9 +597,8 @@ test "begin expression" {
     defer parser.deinit();
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
-    ast.printTokens();
-    ast.pprint();
 
+    ast.pprint();
     const expected = [_]Node{
         // 0
         .{
@@ -698,7 +699,5 @@ test "simple define" {
             .children = .{ .l = 0 * @sizeOf(Value) },
         },
     };
-    ast.printTokens();
-    ast.print();
     try ast.testAst(&expected);
 }

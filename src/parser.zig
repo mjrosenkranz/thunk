@@ -124,9 +124,10 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
         .buf = src,
     };
     self.advance();
+
     var last_root_idx: NodeIdx = 0;
     var root_idx: NodeIdx = 0;
-    while (!self.match(.eof)) : (self.advance()) {
+    while (!self.match(.eof)) {
         root_idx = @intCast(NodeIdx, self.nodes.items.len);
         if (root_idx != 0) {
             self.nodes.items[last_root_idx].children.r = root_idx;
@@ -140,6 +141,24 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
         // modify the root to use the new found child
         self.nodes.items[root_idx].children = .{ .l = id };
     }
+
+    // var last_root_idx: NodeIdx = 0;
+    // var root_idx: NodeIdx = 0;
+    // while (!self.match(.eof)) : (self.advance()) {
+    //     root_idx = @intCast(NodeIdx, self.nodes.items.len);
+    //     if (root_idx != 0) {
+    //         self.nodes.items[last_root_idx].children.r = root_idx;
+    //     }
+    //     try self.nodes.append(.{
+    //         .tag = .seq,
+    //         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    //         .children = .{},
+    //     });
+    //     @breakpoint();
+    //     const id = try self.parseExpr();
+    //     // modify the root to use the new found child
+    //     self.nodes.items[root_idx].children = .{ .l = id };
+    // }
 
     return Ast{
         .tokens = self.tokens.toOwnedSlice(),
@@ -179,7 +198,9 @@ pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
             return ParseError.UnexpectedCloseParen;
         },
         else => {
-            std.debug.print("UnexpectedTag: {}\n", .{self.curr.tag});
+            std.debug.print("UnexpectedTag: ", .{});
+            self.curr.print();
+            std.debug.print("\n", .{});
             return ParseError.UnexpectedTag;
         },
     };
@@ -342,17 +363,10 @@ pub fn parseSeq(
     const begin_seq_idx = @intCast(NodeIdx, self.nodes.items.len);
     const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len);
     try self.consume(.begin, ParseError.ExpectedBegin);
-    // try self.nodes.append(.{
-    //     .tag = .seq,
-    //     .token_idx = ,
-    //     .children = .{},
-    // });
 
     var last_root_idx: NodeIdx = begin_seq_idx;
     var root_idx: NodeIdx = begin_seq_idx;
     while (true) {
-        std.debug.print("c_tag: \n", .{});
-        self.curr.print();
         switch (self.curr.tag) {
             // we at the end of the sequence
             .rparen => {
