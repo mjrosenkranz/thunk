@@ -515,6 +515,53 @@ test "call nested" {
     try std.testing.expect(ast.getData(Value, ast.nodes[11].children.l).float == 5.0);
 }
 
+test "if statement" {
+    const code =
+        \\(if #t 12 -3)
+    ;
+
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1, .r = 0 },
+        },
+        // 1
+        .{
+            .tag = .@"if",
+            .token_idx = 1,
+            .children = .{ .l = 3, .r = 4 },
+        },
+        // 2
+        .{
+            .tag = .constant,
+            .token_idx = 2,
+            .children = .{ .l = 0 },
+        },
+        // 3
+        .{
+            // 12
+            .tag = .constant,
+            .token_idx = 3,
+            .children = .{ .l = 1 * @sizeOf(Value) },
+        },
+        // 4
+        .{
+            // -3
+            .tag = .constant,
+            .token_idx = 4,
+            .children = .{ .l = 2 * @sizeOf(Value) },
+        },
+    };
+    try ast.testAst(&expected);
+}
+
 test "two expressions" {
     const code =
         //0 1 2  3
@@ -525,8 +572,6 @@ test "two expressions" {
     defer parser.deinit();
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
-
-    ast.pprint();
 
     // 0        1     3  2
     // root -> if -> thn x
@@ -598,7 +643,6 @@ test "begin expression" {
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
 
-    ast.pprint();
     const expected = [_]Node{
         // 0
         .{

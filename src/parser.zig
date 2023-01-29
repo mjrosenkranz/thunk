@@ -240,6 +240,7 @@ pub fn parseBool(
     // push the token
     const token_idx = @intCast(u32, self.tokens.items.len);
     try self.tokens.append(self.curr);
+    self.advance();
 
     const node_idx = @intCast(u32, self.nodes.items.len);
     // parse the number into a value
@@ -340,6 +341,7 @@ pub fn parseCond(
     _ = try self.parseExpr();
 
     const then_idx = try self.parseExpr();
+
     const else_idx = blk: {
         const else_tok = self.curr;
         if (else_tok.tag == .rparen) {
