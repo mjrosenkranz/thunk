@@ -36,8 +36,8 @@ pub const String = struct {
         allocator.free(buf);
     }
 
-    pub fn slice(self: *String) []u8 {
-        return @ptrCast([*]u8, &self.bytes)[0..self.len];
+    pub fn slice(self: *String) []const u8 {
+        return @ptrCast([*]const u8, &self.bytes)[0..self.len];
     }
 };
 

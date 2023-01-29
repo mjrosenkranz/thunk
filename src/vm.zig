@@ -192,6 +192,7 @@ test "just returns" {
     var chunk = try Chunk.fromSlice(&.{
         Inst.init(.ret, .{}),
     });
+    defer chunk.deinit();
 
     try vm.exec(&chunk);
 }
@@ -203,6 +204,7 @@ test "UnexpectedEnd" {
     var chunk = try Chunk.fromSlice(&.{
         Inst.init(.load, .{}),
     });
+    defer chunk.deinit();
 
     try testing.expectError(error.UnexpectedEnd, vm.exec(&chunk));
 }
@@ -212,6 +214,7 @@ test "load a value" {
     defer vm.deinit();
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load first constant into register 2
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = 2, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // return nada
@@ -232,6 +235,7 @@ test "load some values and add them" {
     const c = 3;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into b
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = b, .u = try chunk.pushConst(.{ .float = 3 }) }));
     // load a constant into c
@@ -257,6 +261,7 @@ test "add and store in same register" {
     const b = 2;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into a
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
@@ -280,6 +285,7 @@ test "add constediate" {
     const a = 1;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into a
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
@@ -303,6 +309,7 @@ test "subtract" {
     const d = 4;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into a
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
@@ -334,6 +341,7 @@ test "multiply" {
     const d = 4;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into a
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 7 }) }));
     // load a constant into b
@@ -365,6 +373,7 @@ test "divide" {
     const d = 4;
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     // load a constant into a
     _ = try chunk.pushInst(Inst.init(.load, .{ .r = a, .u = try chunk.pushConst(.{ .float = 8 }) }));
     // load a constant into b
@@ -394,6 +403,7 @@ test "if statement" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(true == chunk.consts[0].boolean);
@@ -430,6 +440,7 @@ test "addition one" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(2 == chunk.consts[0].float);
@@ -447,6 +458,7 @@ test "addition two" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(1 == chunk.consts[0].float);
@@ -465,6 +477,7 @@ test "addition many" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(1 == chunk.consts[0].float);
@@ -484,6 +497,7 @@ test "nested arithmetic" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(chunk.consts[0].float == 12);
@@ -507,6 +521,7 @@ test "ineq" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(3 == chunk.consts[0].float);
@@ -525,6 +540,7 @@ test "ineq false" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(3 == chunk.consts[0].float);
@@ -543,6 +559,7 @@ test "ineq eql" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(4 == chunk.consts[0].float);
@@ -562,6 +579,7 @@ test "exec and" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(true == chunk.consts[0].boolean);
@@ -581,6 +599,7 @@ test "exec and false" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(false == chunk.consts[0].boolean);
@@ -600,6 +619,7 @@ test "exec or" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(false == chunk.consts[0].boolean);
@@ -619,6 +639,7 @@ test "exec or true" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(true == chunk.consts[0].boolean);
@@ -638,6 +659,7 @@ test "exec not" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(true == chunk.consts[0].boolean);
@@ -658,6 +680,7 @@ test "exec begin" {
     defer vm.deinit();
 
     var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expect(chunk.consts[0].float == 2);
@@ -669,89 +692,22 @@ test "exec begin" {
     try testing.expect(vm.regs[1].boolean == false);
 }
 
-const Interp = struct {
-    /// index of current instruction
-    pc: usize,
-    /// indices of the instructions to use
-    inds: []const u8,
-    /// arguments to those instructions
-    /// should be same size as inds
-    args: []const u32,
-    /// the value this returns
-    ret: u32,
-};
+test "define global" {
+    const code =
+        \\(define global #f)
+    ;
 
-const InstFn = *const fn (interp: *Interp) void;
-const inst_fns = [_]InstFn{
-    &exec,
-    &add,
-    &sub,
-};
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
 
-fn exec(interp: *Interp) void {
-    if (interp.pc >= interp.inds.len) return;
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(chunk.consts[0].boolean == false);
+    try testing.expect(std.mem.eql(u8, "global", chunk.consts[1].string.slice()));
 
-    const fidx = interp.inds[interp.pc];
-    return inst_fns[fidx](interp);
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.env.map.get("global").?.boolean == false);
 }
-
-fn add(interp: *Interp) void {
-    interp.ret = interp.ret + interp.args[interp.pc];
-    interp.pc += 1;
-    return inst_fns[0](interp);
-}
-
-fn sub(interp: *Interp) void {
-    interp.ret = interp.ret - interp.args[interp.pc];
-    interp.pc += 1;
-    return inst_fns[0](interp);
-}
-
-test "fast interp" {
-    var interp = Interp{
-        .pc = 0,
-        .ret = 0,
-        .inds = &[_]u8{
-            // add
-            1,
-            // add
-            1,
-            // add
-            2,
-        },
-        .args = &[_]u32{
-            // first argument is 5
-            5,
-            // second argument is 7
-            7,
-            // second argument is 2
-            2,
-        },
-    };
-
-    exec(&interp);
-
-    try std.testing.expect(interp.ret == 10);
-}
-
-test "taged goto" {
-    const I = enum {
-        add,
-        sub,
-    };
-
-    const insts = &[_]I{
-        .add,
-        .sub,
-    };
-
-    var pc = 0;
-    var i = insts[i];
-    while (true) : (pc += 1) {
-        i = switch (i) {
-
-        };
-    }
-
-}
-

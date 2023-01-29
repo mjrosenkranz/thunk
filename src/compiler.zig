@@ -31,7 +31,7 @@ pub fn compile(src: []const u8, env: *Env, allocator: Allocator) CompileError!Ch
     var ast = try parser.parse(src);
     defer ast.deinit(allocator);
 
-    var chunk = Chunk{};
+    var chunk = Chunk.init(allocator);
     var compiler = Compiler{
         .chunk = &chunk,
         .ast = &ast,
@@ -93,8 +93,9 @@ pub const Compiler = struct {
                     },
                 ));
             },
+            .define => try self.applyDefine(idx),
             .seq => try self.evalSequence(idx),
-            .@"if" => try self.compileCond(idx),
+            .@"if" => try self.applyCond(idx),
             .call => try self.applyNode(idx),
             else => return CompileError.NotYetImplemented,
         }
@@ -121,7 +122,7 @@ pub const Compiler = struct {
         }
     }
 
-    fn compileCond(
+    fn applyCond(
         self: *Compiler,
         if_idx: NodeIdx,
     ) CompileError!void {
@@ -184,6 +185,34 @@ pub const Compiler = struct {
 
         // patch the jump instruction
         self.chunk.code[thn_jump_idx].data = thn_jump_amt;
+    }
+
+    fn applyDefine(
+        self: *Compiler,
+        def_idx: NodeIdx,
+    ) CompileError!void {
+        const def_node = self.ast.nodes[def_idx];
+        // get the value by evaluating
+        try self.evalNode(def_node.children.r);
+        const value_reg = self.last_reg;
+
+        // create a symbol by evaluating
+        // TODO: make this use a symbol data type directly
+
+        // copy symbol name with allocator
+        const lhs = self.ast.nodes[def_node.children.l];
+        _ = try self.chunk.pushInst(Inst.init(
+            .define_global,
+            .{
+                .r = value_reg,
+                .u = try self.chunk.pushConstStr(
+                    self.ast.tokens[lhs.token_idx].loc.slice,
+                ),
+            },
+        ));
+
+        // pop the register used for value
+        self.freeReg();
     }
 
     /// apply a call
@@ -380,6 +409,7 @@ test "compile number literal" {
     defer ast.deinit(std.testing.allocator);
 
     var chunk = Chunk{};
+    defer chunk.deinit();
     var compiler = Compiler{
         .chunk = &chunk,
         .ast = &ast,
@@ -401,6 +431,7 @@ test "if statement" {
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
     var chunk = Chunk{};
+    defer chunk.deinit();
     var compiler = Compiler{
         .chunk = &chunk,
         .ast = &ast,
@@ -443,6 +474,7 @@ test "if no else" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
 
     try testing.expect(true == chunk.consts[0].boolean);
     try testing.expect(12 == chunk.consts[1].float);
@@ -472,6 +504,7 @@ test "primitive call" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
 
     try testing.expectEqualSlices(Inst, &.{
         // load 1 into 1
@@ -494,6 +527,7 @@ test "and" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
 
     try testing.expectEqualSlices(Inst, &.{
         // load arg1 into reg1
@@ -533,6 +567,7 @@ test "or" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
 
     try testing.expectEqualSlices(Inst, &.{
         // load arg1 into reg1
@@ -556,6 +591,7 @@ test "not" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
 
     try testing.expectEqualSlices(Inst, &.{
         // load arg1 into reg1
@@ -575,4 +611,25 @@ test "not too many" {
     var env = Env.init(testing.allocator);
     defer env.deinit();
     try testing.expectError(CompileError.WrongNumberArguments, compile(code, &env, std.testing.allocator));
+}
+
+test "define" {
+    const code =
+        \\(define global 32)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+
+    var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load 32 into reg 1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // asign the the symbol in const[r] the value in reg1
+        Inst.init(.define_global, .{ .u = 1, .r = 1 }),
+        // return nothing
+        Inst.init(.ret, .{ .r = 0 }),
+    }, chunk.code[0..chunk.n_inst]);
 }
