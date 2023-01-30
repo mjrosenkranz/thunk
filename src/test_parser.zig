@@ -745,3 +745,154 @@ test "simple define" {
     };
     try ast.testAst(&expected);
 }
+
+test "let expression" {
+    const code =
+        \\(let ((x 55)
+        \\      (y 32))
+        \\  (+ x y))
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    //                 x
+    // let -> pair -> pair -> x
+    //         |        |---> 55
+    //         |----> pair -> y
+    //                  |---> 32
+    //  |---> seq --> call +
+    //                 |-> pair -> x
+    //                      |----> pair -> y
+
+    //// 1
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .let,
+            .token_idx = 1,
+            .children = .{
+                .l = 1,
+                .r = 9,
+            },
+        },
+        // 2
+        .{
+            .tag = .pair,
+            .token_idx = 2,
+            .children = .{
+                .l = 3,
+                .r = 6,
+            },
+        },
+        // 3
+        .{
+            .tag = .pair,
+            .token_idx = 3,
+            .children = .{
+                .l = 4,
+                .r = 5,
+            },
+        },
+        // 4
+        .{
+            // x
+            .tag = .symbol,
+            .token_idx = 4,
+            .children = .{},
+        },
+        // 5
+        .{
+            // 55
+            .tag = .constant,
+            .token_idx = 5,
+            .children = .{
+                .l = 0 * @sizeOf(Value),
+            },
+        },
+
+        // 6
+        .{
+            .tag = .pair,
+            .token_idx = 7,
+            .children = .{
+                .l = 7,
+                .r = 9,
+            },
+        },
+        // 7
+        .{
+            // y
+            .tag = .symbol,
+            .token_idx = 8,
+            .children = .{},
+        },
+        // 8
+        .{
+            // 32
+            .tag = .constant,
+            .token_idx = 9,
+            .children = .{
+                .l = 1 * @sizeOf(Value),
+            },
+        },
+
+        // 9
+        .{
+            .tag = .seq,
+            .token_idx = 13,
+            .children = .{
+                .l = 10,
+            },
+        },
+
+        // 10
+        .{
+            .tag = .call,
+            .token_idx = 13,
+            .children = .{
+                .l = 2 * @sizeOf(Value),
+                .r = 11,
+            },
+        },
+        // 11
+        .{
+            .tag = .symbol,
+            .children = .{},
+            .token_idx = 14,
+        },
+        // 12
+        .{
+            .tag = .pair,
+            .token_idx = 15,
+            .children = .{ .l = 4, .r = 5 },
+        },
+        // 13
+        .{
+            .tag = .symbol,
+            .token_idx = 15,
+            .children = .{},
+        },
+        // 14
+        .{
+            .tag = .pair,
+            .token_idx = 16,
+            .children = .{ .l = 6 },
+        },
+        // 15
+        .{
+            .tag = .symbol,
+            .token_idx = 16,
+            .children = .{ .l = 1 * @sizeOf(Value) },
+        },
+    };
+    try ast.testAst(&expected);
+}

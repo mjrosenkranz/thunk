@@ -29,7 +29,7 @@ pub const ParseError = error{
     ExpectedBegin,
 
     SyntaxError,
-} || Allocator.Error;
+} || Allocator.Error || error{NotYetImplemented};
 
 /// all the nodes in this tree
 nodes: NodeList,
@@ -288,10 +288,11 @@ pub fn parseForm(
         .begin => try self.parseSeq(),
         .define => try self.parseDefine(),
         .set => try self.parseSet(),
+        .let => try self.parseBinding(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
-            break :blk try self.parseCall();
+            break :blk try self.parseApply();
         },
     };
 
@@ -342,6 +343,13 @@ pub fn parseSet(
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return idx;
+}
+
+pub fn parseBinding(
+    self: *Parser,
+) ParseError!NodeIdx {
+    _ = self;
+    return ParseError.NotYetImplemented;
 }
 
 /// parse a conditional statement
@@ -423,7 +431,7 @@ pub fn parseSeq(
     return begin_seq_idx;
 }
 
-pub fn parseCall(
+pub fn parseApply(
     self: *Parser,
 ) ParseError!NodeIdx {
     // create call node

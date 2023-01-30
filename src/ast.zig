@@ -85,9 +85,17 @@ pub const Node = struct {
         /// r is the else branch
         @"if",
         /// define a global variable
+        /// l is the variable symbol
+        /// r is the value
         define,
         /// set a global variable
+        /// l is the variable symbol
+        /// r is the value
         set,
+        /// define a list of local variables
+        /// l is the assoc list of bindings
+        /// r is the body, a sequence
+        let,
     };
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
