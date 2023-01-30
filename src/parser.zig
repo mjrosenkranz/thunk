@@ -288,7 +288,7 @@ pub fn parseForm(
         .begin => try self.parseSeq(),
         .define => try self.parseDefine(),
         .set => try self.parseSet(),
-        .let => try self.parseBinding(),
+        .let => try self.parseLet(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
@@ -343,6 +343,52 @@ pub fn parseSet(
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return idx;
+}
+
+pub fn parseLet(
+    self: *Parser,
+) ParseError!NodeIdx {
+    // save this for later when we have to patch the then and else branches
+    const let_idx = @intCast(NodeIdx, self.nodes.items.len);
+    // push the if statement to the tree
+    try self.nodes.append(.{
+        .tag = .let,
+        .children = .{},
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    // should not failt to consume let
+    try self.consume(.let, ParseError.SyntaxError);
+
+    const bindings_idx = @intCast(NodeIdx, self.nodes.items.len);
+    // start the first pair
+    try self.node.append(.{
+        .tag = .pair,
+        .children = .{
+            .l = -1,
+            .r = -1,
+        },
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    // now we should have an assoc list
+    try self.consume(.lparen, ParseError.ExpectedOpenParen);
+
+    // add the binding
+    const bind_idx = try self.parseExpr();
+    _ = bind_idx;
+    // add value
+    const val_idx = try self.parseExpr();
+    _ = val_idx;
+
+    // end of the list
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
+
+    const body_idx = -1;
+
+    // set the left to the list
+    self.nodes.items[let_idx].children.l = bindings_idx;
+    self.nodes.items[let_idx].children.r = body_idx;
+
+    return ParseError.NotYetImplemented;
 }
 
 pub fn parseBinding(

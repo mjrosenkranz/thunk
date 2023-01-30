@@ -756,12 +756,15 @@ test "let expression" {
     defer parser.deinit();
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
+    ast.print();
 
     //                 x
     // let -> pair -> pair -> x
-    //         |        |---> 55
-    //         |----> pair -> y
-    //                  |---> 32
+    //  |      |        |---> 55
+    //  |      |
+    //  |     pair -> pair -> y
+    //  |               |---> 32
+    //  |
     //  |---> seq --> call +
     //                 |-> pair -> x
     //                      |----> pair -> y
@@ -818,24 +821,32 @@ test "let expression" {
                 .l = 0 * @sizeOf(Value),
             },
         },
-
         // 6
         .{
             .tag = .pair,
             .token_idx = 7,
             .children = .{
                 .l = 7,
+            },
+        },
+
+        // 7
+        .{
+            .tag = .pair,
+            .token_idx = 7,
+            .children = .{
+                .l = 8,
                 .r = 9,
             },
         },
-        // 7
+        // 8
         .{
             // y
             .tag = .symbol,
             .token_idx = 8,
             .children = .{},
         },
-        // 8
+        // 9
         .{
             // 32
             .tag = .constant,
@@ -845,49 +856,49 @@ test "let expression" {
             },
         },
 
-        // 9
+        // 10
         .{
             .tag = .seq,
             .token_idx = 13,
             .children = .{
-                .l = 10,
+                .l = 11,
             },
         },
 
-        // 10
+        // 11
         .{
             .tag = .call,
             .token_idx = 13,
             .children = .{
                 .l = 2 * @sizeOf(Value),
-                .r = 11,
+                .r = 12,
             },
         },
-        // 11
+        // 12
         .{
             .tag = .symbol,
             .children = .{},
             .token_idx = 14,
         },
-        // 12
+        // 13
         .{
             .tag = .pair,
             .token_idx = 15,
-            .children = .{ .l = 4, .r = 5 },
+            .children = .{ .l = 14, .r = 15 },
         },
-        // 13
+        // 14
         .{
             .tag = .symbol,
             .token_idx = 15,
             .children = .{},
         },
-        // 14
+        // 15
         .{
             .tag = .pair,
             .token_idx = 16,
-            .children = .{ .l = 6 },
+            .children = .{ .l = 16 },
         },
-        // 15
+        // 16
         .{
             .tag = .symbol,
             .token_idx = 16,
