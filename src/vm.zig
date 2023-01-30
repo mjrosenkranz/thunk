@@ -6,6 +6,13 @@ const Inst = @import("inst.zig").Inst;
 const Value = @import("value.zig").Value;
 const String = @import("value.zig").String;
 const Env = @import("env.zig").Env;
+
+pub const RuntimeError = error{
+    PastChunkEnd,
+    UndefinedSymbol,
+    UnexpectedEnd,
+};
+
 /// virtual machine for interpreting our op-codes
 pub const Vm = struct {
     const Self = @This();
@@ -46,7 +53,7 @@ pub const Vm = struct {
     }
 
     pub fn step(self: *Self, chunk: *Chunk) !void {
-        if (self.ip >= chunk.n_inst) return error.PastChunkEnd;
+        if (self.ip >= chunk.n_inst) return RuntimeError.PastChunkEnd;
 
         const inst = chunk.code[self.ip];
 
@@ -111,6 +118,13 @@ pub const Vm = struct {
                 const args = inst.argu();
                 const val = chunk.consts[args.u];
                 try Value.assertType(.string, val);
+                const str = val.string;
+                try self.env.map.put(str.slice(), self.regs[args.r]);
+            },
+            .get_global => {
+                const args = inst.argu();
+                const val = chunk.consts[args.u];
+                try Value.assertType(.string, val);
                 try self.env.map.put(val.string.slice(), self.regs[args.r]);
             },
             .eq_true => {
@@ -169,14 +183,12 @@ pub const Vm = struct {
             // should throw an error
             // TODO: this should maybe be handled differently?
             // is there a case where a chunk should just end?
-            return error.UnexpectedEnd;
+            return RuntimeError.UnexpectedEnd;
         }
     }
 };
 
-const TestConfig = Vm.Config{
-    .debug_trace = true,
-};
+const TestConfig = Vm.Config{};
 
 const eps = std.math.epsilon(f32);
 
@@ -206,7 +218,7 @@ test "UnexpectedEnd" {
     });
     defer chunk.deinit();
 
-    try testing.expectError(error.UnexpectedEnd, vm.exec(&chunk));
+    try testing.expectError(RuntimeError.UnexpectedEnd, vm.exec(&chunk));
 }
 
 test "load a value" {
@@ -710,4 +722,50 @@ test "define global" {
     try vm.exec(&chunk);
 
     try testing.expect(vm.env.map.get("global").?.boolean == false);
+}
+
+test "get global" {
+    const code =
+        \\(define global #f)
+        \\global
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(chunk.consts[0].boolean == false);
+    try testing.expect(std.mem.eql(u8, "global", chunk.consts[1].string.slice()));
+
+    try vm.exec(&chunk);
+
+    try testing.expect(vm.env.map.get("global").?.boolean == false);
+    try testing.expect(vm.regs[1].boolean == false);
+}
+
+test "set global" {
+    const code =
+        \\(define global #f)
+        \\(set! global 32)
+    ;
+
+    var vm = Vm.initConfig(TestConfig, testing.allocator);
+    defer vm.deinit();
+
+    var chunk = try compiler.compile(code, &vm.env, testing.allocator);
+    defer chunk.deinit();
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    try testing.expect(chunk.consts[0].boolean == false);
+    try testing.expect(std.mem.eql(u8, "global", chunk.consts[1].string.slice()));
+
+    try vm.exec(&chunk);
+
+    vm.env.map.get("global").?.print();
+    std.debug.print("\n", .{});
+
+    try testing.expect(vm.env.map.get("global").?.float == 32);
 }

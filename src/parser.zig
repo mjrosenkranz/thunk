@@ -287,6 +287,7 @@ pub fn parseForm(
         .@"if" => try self.parseCond(),
         .begin => try self.parseSeq(),
         .define => try self.parseDefine(),
+        .set => try self.parseSet(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
@@ -308,6 +309,29 @@ pub fn parseDefine(
         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
     });
     try self.consume(.define, error.FormFailed);
+
+    // this should be a symbol
+    self.nodes.items[idx].children.l = try self.parseSymbol();
+
+    // evaluate the body
+    self.nodes.items[idx].children.r = try self.parseExpr();
+
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
+
+    return idx;
+}
+
+pub fn parseSet(
+    self: *Parser,
+) ParseError!NodeIdx {
+    // add define node
+    const idx = @intCast(NodeIdx, self.nodes.items.len);
+    try self.nodes.append(.{
+        .tag = .set,
+        .children = .{},
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    try self.consume(.set, error.FormFailed);
 
     // this should be a symbol
     self.nodes.items[idx].children.l = try self.parseSymbol();

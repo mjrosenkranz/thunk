@@ -94,9 +94,24 @@ pub const Compiler = struct {
                 ));
             },
             .define => try self.applyDefine(idx),
+            .set => try self.applySet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
             .call => try self.applyNode(idx),
+            .symbol => {
+                // TOOD: intern strings so we don't have a string
+                // pushed to the consts twice
+                // get the string into a constant
+                _ = try self.chunk.pushInst(Inst.init(
+                    .get_global,
+                    .{
+                        .r = try self.allocReg(),
+                        .u = try self.chunk.pushConstStr(
+                            self.ast.tokens[node.token_idx].loc.slice,
+                        ),
+                    },
+                ));
+            },
             else => return CompileError.NotYetImplemented,
         }
     }
@@ -203,6 +218,34 @@ pub const Compiler = struct {
         const lhs = self.ast.nodes[def_node.children.l];
         _ = try self.chunk.pushInst(Inst.init(
             .define_global,
+            .{
+                .r = value_reg,
+                .u = try self.chunk.pushConstStr(
+                    self.ast.tokens[lhs.token_idx].loc.slice,
+                ),
+            },
+        ));
+
+        // pop the register used for value
+        self.freeReg();
+    }
+
+    fn applySet(
+        self: *Compiler,
+        def_idx: NodeIdx,
+    ) CompileError!void {
+        const def_node = self.ast.nodes[def_idx];
+        // get the value by evaluating
+        try self.evalNode(def_node.children.r);
+        const value_reg = self.last_reg;
+
+        // create a symbol by evaluating
+        // TODO: make this use a symbol data type directly
+
+        // copy symbol name with allocator
+        const lhs = self.ast.nodes[def_node.children.l];
+        _ = try self.chunk.pushInst(Inst.init(
+            .set_global,
             .{
                 .r = value_reg,
                 .u = try self.chunk.pushConstStr(
@@ -629,6 +672,46 @@ test "define" {
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // asign the the symbol in const[r] the value in reg1
         Inst.init(.define_global, .{ .u = 1, .r = 1 }),
+        // return nothing
+        Inst.init(.ret, .{ .r = 0 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "get global" {
+    const code =
+        \\global
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+
+    var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // get the global
+        Inst.init(.get_global, .{ .r = 1, .u = 0 }),
+        // return nothing
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "set global" {
+    const code =
+        \\(set! global 32)
+    ;
+
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+
+    var chunk = try compile(code, &env, std.testing.allocator);
+    defer chunk.deinit();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load 32 into reg 1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // asign the the symbol in const[r] the value in reg1
+        Inst.init(.set_global, .{ .u = 1, .r = 1 }),
         // return nothing
         Inst.init(.ret, .{ .r = 0 }),
     }, chunk.code[0..chunk.n_inst]);

@@ -27,6 +27,7 @@ pub const Op = enum(OpSize) {
     divconst,
     define_global,
     set_global,
+    get_global,
     lt,
     lte,
     gt,
@@ -199,6 +200,13 @@ pub const Inst = packed struct(InstSize) {
                     self.argu().r,
                 });
             },
+            .get_global => {
+                std.debug.print(offset_fmt ++ "get: reg[{}] = <global const[{}]>\n", .{
+                    offset,
+                    self.argu().r,
+                    self.argu().u,
+                });
+            },
             .set_global => {
                 std.debug.print(offset_fmt ++ "set: <global const[{}]> = reg[{}]\n", .{
                     offset,
@@ -300,8 +308,10 @@ pub const Inst = packed struct(InstSize) {
 
             // define a global variable where the symbol name is in u and value in r
             .define_global => ArgU,
-            //set value of global variable where symbol name is in u and value in r
+            // set value of global variable where symbol name is in u and value in r
             .set_global => ArgU,
+            // get value of global variable where symbol name is in u destination is r
+            .get_global => ArgU,
             // change ip by i
             .jmp => ArgI,
             // if the value in reg r is truthy then skip next inst

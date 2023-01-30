@@ -86,6 +86,8 @@ pub const Node = struct {
         @"if",
         /// define a global variable
         define,
+        /// set a global variable
+        set,
     };
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
