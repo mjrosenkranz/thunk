@@ -100,6 +100,33 @@ pub const Node = struct {
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
         switch (n.tag) {
+            .let => {
+                std.debug.print("(let (\n", .{});
+
+                const let = ast.nodes[i];
+                {
+                    std.debug.print("(", .{});
+                    var lst_idx: NodeIdx = let.children.l;
+                    ast.nodes[lst_idx].pprint(lst_idx, ast);
+                    // get the assoc from this item in the list
+                    std.debug.print(")", .{});
+                }
+
+                std.debug.print("\n)\n", .{});
+
+                {
+                    var body_idx: NodeIdx = let.children.r;
+
+                    // print bindings
+                    std.debug.print(")", .{});
+
+                    // print body
+                    ast.nodes[body_idx].pprint(body_idx, ast);
+                }
+
+                // end
+                std.debug.print(")\n", .{});
+            },
             .seq => {
                 std.debug.print("(seq \n", .{});
 
@@ -163,6 +190,9 @@ pub const Node = struct {
             .define => {
                 std.debug.print("define ", .{});
             },
+            .set => {
+                std.debug.print("set! ", .{});
+            },
         }
     }
 };
@@ -210,22 +240,23 @@ pub fn testAst(ast: Ast, expected: []const Node) !void {
 pub fn print(ast: Ast) void {
     std.debug.print("tree:\n", .{});
     for (ast.nodes) |n, i| {
-        if (n.tag == .symbol) {
-            std.debug.print("{} {}[l: {} r: {}] ;; {s}\n", .{
-                i,
-                n.tag,
-                n.children.l,
-                n.children.r,
-                ast.tokens[n.token_idx].loc.slice,
-            });
-        } else {
-            std.debug.print("{} {}[l: {} r: {}]\n", .{
-                i,
-                n.tag,
-                n.children.l,
-                n.children.r,
-            });
-        }
+        //if (n.tag == .symbol) {
+        std.debug.print("{} {}[l: {} r: {}] ;; {s} [{}]\n", .{
+            i,
+            n.tag,
+            n.children.l,
+            n.children.r,
+            ast.tokens[n.token_idx].loc.slice,
+            n.token_idx,
+        });
+        // } else {
+        //     std.debug.print("{} {}[l: {} r: {}]\n", .{
+        //         i,
+        //         n.tag,
+        //         n.children.l,
+        //         n.children.r,
+        //     });
+        // }
     }
 }
 

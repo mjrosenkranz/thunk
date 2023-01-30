@@ -654,7 +654,7 @@ test "begin expression" {
         // 1
         .{
             .tag = .seq,
-            .token_idx = 1,
+            .token_idx = 2,
             .children = .{ .l = 2, .r = 5 },
         },
 
@@ -746,7 +746,128 @@ test "simple define" {
     try ast.testAst(&expected);
 }
 
-test "let expression" {
+test "let expression single binding" {
+    const code =
+        \\(let ((x 55))
+        \\  (+ x 1))
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    //                 x
+    // let -> pair -> pair -> x
+    //  |               |---> 55
+    //  |
+    //  |---> seq --> call +
+    //                 |-> pair -> x
+    //                      |----> pair -> 1
+
+    //// 1
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .let,
+            .token_idx = 1,
+            .children = .{
+                .l = 2,
+                .r = 6,
+            },
+        },
+        // 2
+        .{
+            .tag = .pair,
+            .token_idx = 2,
+            .children = .{
+                .l = 3,
+                .r = 0,
+            },
+        },
+        // 3
+        .{
+            .tag = .pair,
+            .token_idx = 3,
+            .children = .{
+                .l = 4,
+                .r = 5,
+            },
+        },
+        // 4
+        .{
+            // x
+            .tag = .symbol,
+            .token_idx = 4,
+            .children = .{},
+        },
+        // 5
+        .{
+            // 55
+            .tag = .constant,
+            .token_idx = 5,
+            .children = .{
+                .l = 0 * @sizeOf(Value),
+            },
+        },
+        // 6
+        .{
+            .tag = .seq,
+            .token_idx = 8,
+            .children = .{
+                .l = 7,
+            },
+        },
+        // 7
+        .{
+            .tag = .call,
+            .token_idx = 8,
+            .children = .{
+                .l = 2 * @sizeOf(Value),
+                .r = 9,
+            },
+        },
+        // 8
+        .{
+            .tag = .symbol,
+            .children = .{},
+            .token_idx = 9,
+        },
+        // 9
+        .{
+            .tag = .pair,
+            .token_idx = 10,
+            .children = .{ .l = 10, .r = 11 },
+        },
+        // 10
+        .{
+            .tag = .symbol,
+            .token_idx = 10,
+            .children = .{},
+        },
+        // 11
+        .{
+            .tag = .pair,
+            .token_idx = 11,
+            .children = .{ .l = 12 },
+        },
+        // 12
+        .{
+            .tag = .constant,
+            .token_idx = 11,
+            .children = .{ .l = 1 * @sizeOf(Value) },
+        },
+    };
+    try ast.testAst(&expected);
+}
+
+test "let expression multiple binding" {
     const code =
         \\(let ((x 55)
         \\      (y 32))

@@ -142,24 +142,6 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
         self.nodes.items[root_idx].children = .{ .l = id };
     }
 
-    // var last_root_idx: NodeIdx = 0;
-    // var root_idx: NodeIdx = 0;
-    // while (!self.match(.eof)) : (self.advance()) {
-    //     root_idx = @intCast(NodeIdx, self.nodes.items.len);
-    //     if (root_idx != 0) {
-    //         self.nodes.items[last_root_idx].children.r = root_idx;
-    //     }
-    //     try self.nodes.append(.{
-    //         .tag = .seq,
-    //         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
-    //         .children = .{},
-    //     });
-    //     @breakpoint();
-    //     const id = try self.parseExpr();
-    //     // modify the root to use the new found child
-    //     self.nodes.items[root_idx].children = .{ .l = id };
-    // }
-
     return Ast{
         .tokens = self.tokens.toOwnedSlice(),
         .nodes = self.nodes.toOwnedSlice(),
@@ -195,6 +177,12 @@ pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
         => try self.parseSymbol(),
         .lparen => try self.parseForm(),
         .rparen => {
+            std.debug.print("UnexpectedCloseParen: \n", .{});
+            std.debug.print("prev:", .{});
+            self.prev.print();
+            std.debug.print(" curr:", .{});
+            self.curr.print();
+            std.debug.print("\n", .{});
             return ParseError.UnexpectedCloseParen;
         },
         else => {
@@ -285,7 +273,10 @@ pub fn parseForm(
 
     const idx = switch (self.curr.tag) {
         .@"if" => try self.parseCond(),
-        .begin => try self.parseSeq(),
+        .begin => blk: {
+            try self.consume(.begin, ParseError.ExpectedBegin);
+            break :blk try self.parseSeq();
+        },
         .define => try self.parseDefine(),
         .set => try self.parseSet(),
         .let => try self.parseLet(),
@@ -359,36 +350,57 @@ pub fn parseLet(
     // should not failt to consume let
     try self.consume(.let, ParseError.SyntaxError);
 
-    const bindings_idx = @intCast(NodeIdx, self.nodes.items.len);
-    // start the first pair
-    try self.node.append(.{
+    const bindings_list_idx = @intCast(NodeIdx, self.nodes.items.len);
+
+    // tail of the list of bindings
+    var tail_idx = bindings_list_idx;
+    try self.nodes.append(.{
         .tag = .pair,
         .children = .{
-            .l = -1,
-            .r = -1,
+            .l = 0,
+            .r = 0,
         },
         .token_idx = @intCast(NodeIdx, self.tokens.items.len),
     });
-    // now we should have an assoc list
+    // beginning of assoc list
     try self.consume(.lparen, ParseError.ExpectedOpenParen);
 
-    // add the binding
-    const bind_idx = try self.parseExpr();
-    _ = bind_idx;
-    // add value
-    const val_idx = try self.parseExpr();
-    _ = val_idx;
+    // first binding:
+    {
+        // add the binding
+        const binding_idx = @intCast(NodeIdx, self.tokens.items.len);
+        try self.nodes.append(.{
+            .tag = .pair,
+            .children = .{
+                .l = 0,
+                .r = 0,
+            },
+            .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+        });
+        try self.consume(.lparen, ParseError.ExpectedOpenParen);
+
+        // variable
+        self.nodes.items[binding_idx].children.l = try self.parseExpr();
+
+        // value
+        self.nodes.items[binding_idx].children.r = try self.parseExpr();
+
+        // end of binding
+        try self.consume(.rparen, ParseError.ExpectedCloseParen);
+
+        self.nodes.items[tail_idx].children.l = binding_idx;
+    }
 
     // end of the list
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
-    const body_idx = -1;
+    const body_idx = try self.parseSeq();
 
     // set the left to the list
-    self.nodes.items[let_idx].children.l = bindings_idx;
+    self.nodes.items[let_idx].children.l = bindings_list_idx;
     self.nodes.items[let_idx].children.r = body_idx;
 
-    return ParseError.NotYetImplemented;
+    return let_idx;
 }
 
 pub fn parseBinding(
@@ -440,10 +452,8 @@ pub fn parseCond(
 pub fn parseSeq(
     self: *Parser,
 ) ParseError!NodeIdx {
+    // const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len) - 1;
     const begin_seq_idx = @intCast(NodeIdx, self.nodes.items.len);
-    const begin_tok_idx = @intCast(NodeIdx, self.tokens.items.len);
-    try self.consume(.begin, ParseError.ExpectedBegin);
-
     var last_root_idx: NodeIdx = begin_seq_idx;
     var root_idx: NodeIdx = begin_seq_idx;
     while (true) {
@@ -459,9 +469,11 @@ pub fn parseSeq(
                 if (root_idx != begin_seq_idx) {
                     self.nodes.items[last_root_idx].children.r = root_idx;
                 }
+                const tok_idx = @intCast(NodeIdx, self.tokens.items.len);
+
                 try self.nodes.append(.{
                     .tag = .seq,
-                    .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+                    .token_idx = tok_idx,
                     .children = .{},
                 });
                 const id = try self.parseExpr();
@@ -469,9 +481,10 @@ pub fn parseSeq(
                 self.nodes.items[root_idx].children = .{ .l = id };
             },
         }
+
+        // self.nodes.items[begin_seq_idx].token_idx = begin_tok_idx;
     }
 
-    self.nodes.items[begin_seq_idx].token_idx = begin_tok_idx;
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return begin_seq_idx;
