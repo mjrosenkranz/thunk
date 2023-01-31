@@ -60,13 +60,14 @@ pub const Scanner = struct {
                     // consume whitespace and reset
                     if (is_whitespace(c)) {
                         self.start = self.offset + 1;
-                        // self.col += 1;
+                        self.col += 1;
 
                         if (c == '\n') {
                             self.line += 1;
-                            self.col = 0;
+                            self.col = 1;
                         }
 
+                        tok.loc.line = self.line;
                         tok.loc.col = self.col;
                     } else if (is_digit(c)) {
                         state = .number;
@@ -174,7 +175,6 @@ pub const Scanner = struct {
                             state = .period;
                         } else {
                             self.offset -= 1;
-                            // self.col -= 1;
                             break;
                         }
                     }
@@ -183,7 +183,6 @@ pub const Scanner = struct {
                     if (self.maybe_identifier()) |id_tag| {
                         tok.tag = id_tag;
                         self.offset -= 1;
-                        // self.col -= 1;
                         break;
                     } else {
                         state = .symbol;
@@ -193,7 +192,6 @@ pub const Scanner = struct {
                     tok.tag = .symbol;
                     if (!is_symbol(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         break;
                     }
                 },
@@ -201,7 +199,6 @@ pub const Scanner = struct {
                     tok.tag = .keyword;
                     if (!is_symbol(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         break;
                     }
                 },
@@ -222,7 +219,6 @@ pub const Scanner = struct {
                     // an identifier
                     if (is_delim(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         break;
                     }
 
@@ -240,7 +236,6 @@ pub const Scanner = struct {
                     // a period
                     if (is_delim(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         tok.tag = .period;
                         break;
                     } else if (is_digit(c)) {
@@ -255,7 +250,6 @@ pub const Scanner = struct {
                 .greater => {
                     if (is_delim(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         tok.tag = .gt;
                         break;
                     } else if (c == '=') {
@@ -270,7 +264,6 @@ pub const Scanner = struct {
                 .less => {
                     if (is_delim(c)) {
                         self.offset -= 1;
-                        // self.col -= 1;
                         tok.tag = .lt;
                         break;
                     } else if (c == '=') {
@@ -307,7 +300,6 @@ pub const Scanner = struct {
     /// attempt to increasae index, returns false if cant
     fn incOffset(self: *Self) ?u8 {
         self.offset += 1;
-        self.col += 1;
         if (self.offset == self.buf.len)
             return null;
 
@@ -323,7 +315,6 @@ pub const Scanner = struct {
         }
 
         // if successful we increase the offset
-        self.col += @intCast(u32, id.len);
         self.offset += id.len;
         return true;
     }
@@ -531,6 +522,7 @@ pub fn testScannerLoc(
         }
         try testing.expect(t.tag == tags[i]);
         if (t.loc.line != locs[i].line) {
+            t.print();
             std.debug.print("[{}] line expected: {} got: {}\n", .{
                 i,
                 locs[i].line,
@@ -539,6 +531,7 @@ pub fn testScannerLoc(
             return error.TestUnexpectedResult;
         }
         if (t.loc.col != locs[i].col) {
+            t.print();
             std.debug.print("[{}] col expected: {} got: {}\n", .{
                 i,
                 locs[i].col,
@@ -564,50 +557,48 @@ pub fn testScannerTokens(
             t.loc.slice,
             str,
         ));
-        toks[i].print();
-        t.print();
         try testing.expect(t.tag == toks[i].tag);
         try testing.expect(t.loc.line == toks[i].loc.line);
         try testing.expect(t.loc.col == toks[i].loc.col);
     }
 }
 
-// test "get next token" {
-//     const code =
-//         \\ (hello 123 world)
-//     ;
-//     const expected_str = [_][]const u8{
-//         "(",
-//         "hello",
-//         "123",
-//         "world",
-//         ")",
-//     };
-//     const expected_tag = [_]Token{
-//         .{
-//             .tag = .lparen,
-//             .loc = .{ .line = 0, .col = 1 },
-//         },
-//         .{
-//             .tag = .symbol,
-//             .loc = .{ .line = 0, .col = 2 },
-//         },
-//         .{
-//             .tag = .number,
-//             .loc = .{ .line = 0, .col = 8 },
-//         },
-//         .{
-//             .tag = .symbol,
-//             .loc = .{ .line = 0, .col = 12 },
-//         },
-//         .{
-//             .tag = .rparen,
-//             .loc = .{ .line = 0, .col = 17 },
-//         },
-//     };
-//
-//     try testScannerTokens(code, &expected_str, &expected_tag);
-// }
+test "get next token" {
+    const code =
+        \\ (hello 123 world)
+    ;
+    const expected_str = [_][]const u8{
+        "(",
+        "hello",
+        "123",
+        "world",
+        ")",
+    };
+    const expected_tag = [_]Token{
+        .{
+            .tag = .lparen,
+            .loc = .{ .line = 1, .col = 2 },
+        },
+        .{
+            .tag = .symbol,
+            .loc = .{ .line = 1, .col = 3 },
+        },
+        .{
+            .tag = .number,
+            .loc = .{ .line = 1, .col = 9 },
+        },
+        .{
+            .tag = .symbol,
+            .loc = .{ .line = 1, .col = 13 },
+        },
+        .{
+            .tag = .rparen,
+            .loc = .{ .line = 1, .col = 18 },
+        },
+    };
+
+    try testScannerTokens(code, &expected_str, &expected_tag);
+}
 
 test "valid symbol" {
     const code =
@@ -951,7 +942,7 @@ test "if" {
 
 test "positions" {
     const code =
-        \\(if (> 2 3)
+        \\(if (> 2 37)
         \\    thn
         \\    els)
     ;
@@ -962,7 +953,7 @@ test "positions" {
         "(",
         ">",
         "2",
-        "3",
+        "37",
         ")",
         "thn",
         "els",
@@ -990,10 +981,11 @@ test "positions" {
         .{ .line = 1, .col = 6 },
         .{ .line = 1, .col = 8 },
         .{ .line = 1, .col = 10 },
-        .{ .line = 1, .col = 11 },
+        .{ .line = 1, .col = 12 },
         .{ .line = 2, .col = 5 },
         .{ .line = 3, .col = 5 },
         .{ .line = 3, .col = 8 },
+        .{ .line = 3, .col = 9 },
     };
 
     try testScannerLoc(code, &expected_str, &expected_tag, &expected_locs);
