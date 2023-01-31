@@ -1,5 +1,6 @@
 const std = @import("std");
 const Token = @import("token.zig");
+const SrcLoc = @import("file.zig").SrcLoc;
 const Tag = Token.Tag;
 const testing = std.testing;
 
@@ -30,9 +31,9 @@ pub const Scanner = struct {
     start: usize = 0,
 
     /// current line
-    line: u32 = 0,
+    line: u32 = 1,
     /// current column
-    col: u32 = 0,
+    col: u32 = 1,
     /// buffer we are tokenizing
     buf: []const u8,
 
@@ -59,7 +60,7 @@ pub const Scanner = struct {
                     // consume whitespace and reset
                     if (is_whitespace(c)) {
                         self.start = self.offset + 1;
-                        self.col += 1;
+                        // self.col += 1;
 
                         if (c == '\n') {
                             self.line += 1;
@@ -285,7 +286,6 @@ pub const Scanner = struct {
 
             // nothing left, return
             const new_idx = self.offset + 1;
-            self.col += 1;
             if (new_idx == self.buf.len) {
                 break;
             } else {
@@ -294,6 +294,7 @@ pub const Scanner = struct {
         }
 
         self.offset += 1;
+        self.col += @intCast(u32, self.offset - self.start);
         tok.loc.slice = self.buf[self.start..self.offset];
 
         if (state == .comment) {
@@ -306,6 +307,7 @@ pub const Scanner = struct {
     /// attempt to increasae index, returns false if cant
     fn incOffset(self: *Self) ?u8 {
         self.offset += 1;
+        self.col += 1;
         if (self.offset == self.buf.len)
             return null;
 
@@ -321,6 +323,7 @@ pub const Scanner = struct {
         }
 
         // if successful we increase the offset
+        self.col += @intCast(u32, id.len);
         self.offset += id.len;
         return true;
     }
@@ -505,6 +508,44 @@ pub fn testScanner(
             ));
         }
         try testing.expect(t.tag == tags[i]);
+    }
+}
+
+pub fn testScannerLoc(
+    src: []const u8,
+    strs: []const []const u8,
+    tags: []const Tag,
+    locs: []const SrcLoc,
+) !void {
+    var scan = Scanner{
+        .buf = src,
+    };
+    for (strs) |str, i| {
+        const t = scan.next();
+        if (str.len > 0) {
+            try testing.expect(std.mem.eql(
+                u8,
+                t.loc.slice,
+                str,
+            ));
+        }
+        try testing.expect(t.tag == tags[i]);
+        if (t.loc.line != locs[i].line) {
+            std.debug.print("[{}] line expected: {} got: {}\n", .{
+                i,
+                locs[i].line,
+                t.loc.line,
+            });
+            return error.TestUnexpectedResult;
+        }
+        if (t.loc.col != locs[i].col) {
+            std.debug.print("[{}] col expected: {} got: {}\n", .{
+                i,
+                locs[i].col,
+                t.loc.col,
+            });
+            return error.TestUnexpectedResult;
+        }
     }
 }
 
@@ -906,4 +947,54 @@ test "if" {
     };
 
     try testScanner(code, &expected_str, &expected_tag);
+}
+
+test "positions" {
+    const code =
+        \\(if (> 2 3)
+        \\    thn
+        \\    els)
+    ;
+
+    const expected_str = [_][]const u8{
+        "(",
+        "if",
+        "(",
+        ">",
+        "2",
+        "3",
+        ")",
+        "thn",
+        "els",
+        ")",
+        "",
+    };
+    const expected_tag = [_]Tag{
+        .lparen,
+        .@"if",
+        .lparen,
+        .gt,
+        .number,
+        .number,
+        .rparen,
+        .symbol,
+        .symbol,
+        .rparen,
+        .eof,
+    };
+
+    const expected_locs = [_]SrcLoc{
+        .{ .line = 1, .col = 1 },
+        .{ .line = 1, .col = 2 },
+        .{ .line = 1, .col = 5 },
+        .{ .line = 1, .col = 6 },
+        .{ .line = 1, .col = 8 },
+        .{ .line = 1, .col = 10 },
+        .{ .line = 1, .col = 11 },
+        .{ .line = 2, .col = 5 },
+        .{ .line = 3, .col = 5 },
+        .{ .line = 3, .col = 8 },
+    };
+
+    try testScannerLoc(code, &expected_str, &expected_tag, &expected_locs);
 }

@@ -870,8 +870,7 @@ test "let expression single binding" {
 test "let expression multiple binding" {
     const code =
         \\(let ((x 55)
-        \\      (y 32)
-        \\      (z #t))
+        \\      (y 32))
         \\  (+ x y))
     ;
     var parser = Parser.init(std.testing.allocator);
