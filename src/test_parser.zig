@@ -870,14 +870,14 @@ test "let expression single binding" {
 test "let expression multiple binding" {
     const code =
         \\(let ((x 55)
-        \\      (y 32))
+        \\      (y 32)
+        \\      (z #t))
         \\  (+ x y))
     ;
     var parser = Parser.init(std.testing.allocator);
     defer parser.deinit();
     var ast = try parser.parse(code);
     defer ast.deinit(std.testing.allocator);
-    ast.print();
 
     //                 x
     // let -> pair -> pair -> x
@@ -904,8 +904,8 @@ test "let expression multiple binding" {
             .tag = .let,
             .token_idx = 1,
             .children = .{
-                .l = 1,
-                .r = 9,
+                .l = 2,
+                .r = 10,
             },
         },
         // 2
@@ -980,7 +980,7 @@ test "let expression multiple binding" {
         // 10
         .{
             .tag = .seq,
-            .token_idx = 13,
+            .token_idx = 12,
             .children = .{
                 .l = 11,
             },
@@ -989,41 +989,41 @@ test "let expression multiple binding" {
         // 11
         .{
             .tag = .call,
-            .token_idx = 13,
+            .token_idx = 12,
             .children = .{
                 .l = 2 * @sizeOf(Value),
-                .r = 12,
+                .r = 13,
             },
         },
         // 12
         .{
             .tag = .symbol,
+            .token_idx = 13,
             .children = .{},
-            .token_idx = 14,
         },
         // 13
         .{
             .tag = .pair,
-            .token_idx = 15,
+            .token_idx = 14,
             .children = .{ .l = 14, .r = 15 },
         },
         // 14
         .{
             .tag = .symbol,
-            .token_idx = 15,
+            .token_idx = 14,
             .children = .{},
         },
         // 15
         .{
             .tag = .pair,
-            .token_idx = 16,
+            .token_idx = 15,
             .children = .{ .l = 16 },
         },
         // 16
         .{
             .tag = .symbol,
-            .token_idx = 16,
-            .children = .{ .l = 1 * @sizeOf(Value) },
+            .token_idx = 15,
+            .children = .{},
         },
     };
     try ast.testAst(&expected);

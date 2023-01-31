@@ -351,9 +351,6 @@ pub fn parseLet(
     try self.consume(.let, ParseError.SyntaxError);
 
     const bindings_list_idx = @intCast(NodeIdx, self.nodes.items.len);
-
-    // tail of the list of bindings
-    var tail_idx = bindings_list_idx;
     try self.nodes.append(.{
         .tag = .pair,
         .children = .{
@@ -365,31 +362,27 @@ pub fn parseLet(
     // beginning of assoc list
     try self.consume(.lparen, ParseError.ExpectedOpenParen);
 
+    var tail_idx = bindings_list_idx;
+
     // first binding:
-    {
-        // add the binding
-        const binding_idx = @intCast(NodeIdx, self.tokens.items.len);
-        try self.nodes.append(.{
-            .tag = .pair,
-            .children = .{
-                .l = 0,
-                .r = 0,
-            },
-            .token_idx = @intCast(NodeIdx, self.tokens.items.len),
-        });
-        try self.consume(.lparen, ParseError.ExpectedOpenParen);
+    while (!(self.match(.rparen) or self.match(.eof))) {
+        var pair = &self.nodes.items[tail_idx];
+        if (pair.children.l != 0) {
+            // old pair right points to new one
+            tail_idx = @intCast(NodeIdx, self.nodes.items.len);
+            pair.children.r = tail_idx;
 
-        // variable
-        self.nodes.items[binding_idx].children.l = try self.parseExpr();
-
-        // value
-        self.nodes.items[binding_idx].children.r = try self.parseExpr();
-
-        // end of binding
-        try self.consume(.rparen, ParseError.ExpectedCloseParen);
-
+            // create the new on
+            try self.nodes.append(.{
+                .tag = .pair,
+                .children = .{},
+                .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+            });
+        }
+        const binding_idx = try self.parseBinding();
         self.nodes.items[tail_idx].children.l = binding_idx;
     }
+    // self.nodes.items[tail_idx].token_idx = self.nodes.items[binding_idx].token_idx;
 
     // end of the list
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
@@ -406,8 +399,30 @@ pub fn parseLet(
 pub fn parseBinding(
     self: *Parser,
 ) ParseError!NodeIdx {
-    _ = self;
-    return ParseError.NotYetImplemented;
+    // add the binding
+    const binding_idx = @intCast(NodeIdx, self.nodes.items.len);
+    try self.nodes.append(.{
+        .tag = .pair,
+        .children = .{
+            .l = 0,
+            .r = 0,
+        },
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    try self.consume(.lparen, ParseError.ExpectedOpenParen);
+
+    // variable
+    const variable = try self.parseExpr();
+    self.nodes.items[binding_idx].children.l = variable;
+
+    // value
+    const val = try self.parseExpr();
+    self.nodes.items[binding_idx].children.r = val;
+
+    // end of binding
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
+
+    return binding_idx;
 }
 
 /// parse a conditional statement
