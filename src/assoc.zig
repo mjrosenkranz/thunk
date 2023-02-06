@@ -1,11 +1,11 @@
 const std = @import("std");
 
-pub fn AssocList(
+pub fn Assoc(
+    comptime N: usize,
     comptime K: type,
     comptime V: type,
     comptime Eq: *const fn (a: K, b: K) bool,
 ) type {
-    const N = 32;
     return struct {
         const Self = @This();
 
@@ -54,7 +54,7 @@ pub fn AssocList(
 }
 
 test "assoc" {
-    const IntAssoc = AssocList(u32, u8, struct {
+    const IntAssoc = Assoc(32, u32, u8, struct {
         pub fn f(a: u32, b: u32) bool {
             return a == b;
         }
@@ -70,7 +70,7 @@ test "assoc" {
 }
 
 test "dissoc" {
-    const IntAssoc = AssocList(u32, u8, struct {
+    const IntAssoc = Assoc(32, u32, u8, struct {
         pub fn f(a: u32, b: u32) bool {
             return a == b;
         }

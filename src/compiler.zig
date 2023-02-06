@@ -14,6 +14,7 @@ const Ast = @import("ast.zig");
 const FnCall = Ast.FnCall;
 const NodeIdx = Ast.NodeIdx;
 const Node = Ast.Node;
+const LocalList = @import("locals.zig").LocalList;
 
 pub const CompileError = error{
     OutOfRegisters,
@@ -45,6 +46,8 @@ pub const Compiler = struct {
     ast: *Ast,
 
     chunk: *Chunk,
+
+    locals: LocalList = .{},
 
     /// the next free register
     last_reg: Reg = 0,
@@ -95,6 +98,7 @@ pub const Compiler = struct {
             },
             .define => try self.applyDefine(idx),
             .set => try self.applySet(idx),
+            .let => try self.applyLet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
             .call => try self.applyNode(idx),
@@ -228,6 +232,52 @@ pub const Compiler = struct {
 
         // pop the register used for value
         self.freeReg();
+    }
+
+    fn applyLet(
+        self: *Compiler,
+        let_idx: NodeIdx,
+    ) CompileError!void {
+        const let = self.nodes[let_idx];
+        const alist_idx = let.children.l;
+
+
+        // consume let
+        // add all bindings to the list (Local -> register)
+        // this means first we evaluate the expr of each binidng
+        // then we add the name o our stack with the current depth
+        //
+        // r = last_reg
+        // (let ((x 33)
+        //       (y 44))
+        //      (let ((z 55))
+        //           (+ x y z)))
+        //
+        // name reg depth
+        //   x  r+1  1
+        //   y  r+2  1
+        //   z  r+3  2
+
+        // node we getting the binding from
+        var b_node = self.nodes[alist_idx];
+        while (b_node.children.r != 0) {
+
+            // (x 33)
+            const binding = self.nodes[b_node.children.l];
+
+            // TODO: assert that this is a symbol?
+            const variable = self.nodes[binding.children.l];
+
+            // compile the binding 
+            self.evalNode(binding.children.r);
+            
+            b_node = self.nodes[b_node.children.r];
+        }
+
+        const body = self.nodes[let.children.l];
+        // compile body
+        // pop all consumed registers
+        // pop them from the assoc list as well
     }
 
     fn applySet(
