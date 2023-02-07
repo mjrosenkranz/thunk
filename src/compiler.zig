@@ -20,7 +20,7 @@ pub const CompileError = error{
     OutOfRegisters,
     WrongNumberArguments,
     NotYetImplemented,
-} || Chunk.ChunkError || Parser.ParseError;
+} || Chunk.ChunkError || Parser.ParseError || @import("assoc.zig").AssocError;
 
 /// helper/wrapper function to take some source and
 /// compile it into a bytecode chunk
@@ -58,6 +58,9 @@ pub const Compiler = struct {
         return self.last_reg;
     }
 
+    // TODO: need to be refactor the way constants and registers
+    // are used so that we are not allocating registers for immediates
+    // and instead only using them for locals
     fn freeReg(self: *Compiler) void {
         if (self.last_reg == 0) {
             std.debug.print("attempt to free last register\n", .{});
@@ -71,17 +74,16 @@ pub const Compiler = struct {
     /// and therefore will only produce one chunk
     pub fn compile(self: *Compiler) CompileError!void {
         // start with the root
-        try self.evalNode(0);
         // push return for for the last allocated register?
         _ = try self.chunk.pushInst(Inst.init(.ret, .{
-            .r = self.last_reg,
+            .r = try self.evalNode(0),
         }));
     }
 
     fn evalNode(
         self: *Compiler,
         idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Reg {
         const node = self.ast.nodes[idx];
         switch (node.tag) {
             .constant => {
@@ -102,21 +104,39 @@ pub const Compiler = struct {
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
             .call => try self.applyNode(idx),
-            .symbol => {
-                // TOOD: intern strings so we don't have a string
-                // pushed to the consts twice
-                // get the string into a constant
-                _ = try self.chunk.pushInst(Inst.init(
-                    .get_global,
-                    .{
-                        .r = try self.allocReg(),
-                        .u = try self.chunk.pushConstStr(
-                            self.ast.tokens[node.token_idx].loc.slice,
-                        ),
-                    },
-                ));
+            .symbol => return try self.evalSymbol(idx),
+            else => {
+                std.debug.print("bad node[{}]: {}\n", .{ idx, node.tag });
+                return CompileError.NotYetImplemented;
             },
-            else => return CompileError.NotYetImplemented,
+        }
+        return self.last_reg;
+    }
+
+    fn evalSymbol(
+        self: *Compiler,
+        idx: NodeIdx,
+    ) CompileError!Reg {
+        const symbol = self.ast.nodes[idx];
+        // TOOD: intern strings so we don't have a string
+        // pushed to the consts twice
+        const symbol_tok = self.ast.tokens[symbol.token_idx];
+        // first check if this is in our locals
+        if (self.locals.get(symbol_tok)) |bind| {
+            return bind.reg;
+        } else {
+            // get the string into a constant
+            _ = try self.chunk.pushInst(Inst.init(
+                .get_global,
+                .{
+                    .r = try self.allocReg(),
+                    .u = try self.chunk.pushConstStr(
+                        self.ast.tokens[symbol.token_idx].loc.slice,
+                    ),
+                },
+            ));
+
+            return self.last_reg;
         }
     }
 
@@ -128,7 +148,7 @@ pub const Compiler = struct {
 
         while (true) {
             const seq = self.ast.nodes[seq_idx];
-            try self.evalNode(seq.children.l);
+            _ = try self.evalNode(seq.children.l);
 
             if (seq.children.r == 0) {
                 break;
@@ -151,9 +171,8 @@ pub const Compiler = struct {
 
         const if_node = self.ast.nodes[if_idx];
         // compile cond
-        try self.evalNode(if_idx + 1);
         // we know that the result of compiling the condition should be in last reg
-        const cond_reg = self.last_reg;
+        const cond_reg = try self.evalNode(if_idx + 1);
         // add test
         _ = try self.chunk.pushInst(
             Inst.init(.eq_true, .{ .r = cond_reg }),
@@ -163,8 +182,7 @@ pub const Compiler = struct {
             Inst.init(.jmp, 0),
         );
         // compile then
-        try self.evalNode(if_node.children.l);
-        const then_reg = self.last_reg;
+        const then_reg = try self.evalNode(if_node.children.l);
         // move the then branch
         const thn_end_idx = try self.chunk.pushInst(
             Inst.init(.move, .{
@@ -182,9 +200,8 @@ pub const Compiler = struct {
             const els_jump_idx = try self.chunk.pushInst(
                 Inst.init(.jmp, 0),
             );
-            try self.evalNode(if_node.children.r);
+            const else_reg = try self.evalNode(if_node.children.r);
             // move the else branch
-            const else_reg = self.last_reg;
             const els_end_idx = try self.chunk.pushInst(
                 Inst.init(.move, .{
                     .r = res,
@@ -212,8 +229,7 @@ pub const Compiler = struct {
     ) CompileError!void {
         const def_node = self.ast.nodes[def_idx];
         // get the value by evaluating
-        try self.evalNode(def_node.children.r);
-        const value_reg = self.last_reg;
+        const value_reg = try self.evalNode(def_node.children.r);
 
         // create a symbol by evaluating
         // TODO: make this use a symbol data type directly
@@ -238,9 +254,8 @@ pub const Compiler = struct {
         self: *Compiler,
         let_idx: NodeIdx,
     ) CompileError!void {
-        const let = self.nodes[let_idx];
+        const let = self.ast.nodes[let_idx];
         const alist_idx = let.children.l;
-
 
         // consume let
         // add all bindings to the list (Local -> register)
@@ -259,25 +274,30 @@ pub const Compiler = struct {
         //   z  r+3  2
 
         // node we getting the binding from
-        var b_node = self.nodes[alist_idx];
-        while (b_node.children.r != 0) {
+        var b_node = self.ast.nodes[alist_idx];
+        while (true) {
 
             // (x 33)
-            const binding = self.nodes[b_node.children.l];
+            const binding = self.ast.nodes[b_node.children.l];
 
             // TODO: assert that this is a symbol?
-            const variable = self.nodes[binding.children.l];
+            const variable = self.ast.nodes[binding.children.l];
 
-            // compile the binding 
-            self.evalNode(binding.children.r);
-            
-            b_node = self.nodes[b_node.children.r];
+            // compile the binding
+            try self.locals.assoc(self.ast.tokens[variable.token_idx], .{
+                .reg = try self.evalNode(binding.children.r),
+                .depth = 0,
+            });
+
+            if (b_node.children.r == 0) break;
+            b_node = self.ast.nodes[b_node.children.r];
         }
 
-        const body = self.nodes[let.children.l];
         // compile body
-        // pop all consumed registers
-        // pop them from the assoc list as well
+        _ = try self.evalNode(let.children.r);
+
+        // TODO: pop all consumed registers
+        // TODO: pop them from the assoc list as well
     }
 
     fn applySet(
@@ -286,8 +306,7 @@ pub const Compiler = struct {
     ) CompileError!void {
         const def_node = self.ast.nodes[def_idx];
         // get the value by evaluating
-        try self.evalNode(def_node.children.r);
-        const value_reg = self.last_reg;
+        const value_reg = try self.evalNode(def_node.children.r);
 
         // create a symbol by evaluating
         // TODO: make this use a symbol data type directly
@@ -357,12 +376,13 @@ pub const Compiler = struct {
             return CompileError.WrongNumberArguments;
         }
 
+        // const res_reg = self.allocReg();
+
         // evaluate each item in the list
         var pair_idx = args_idx;
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
-        try self.evalNode(pair.children.l);
-        const reg0 = self.last_reg;
+        const reg0 = try self.evalNode(pair.children.l);
         pair_idx = pair.children.r;
         // can the instruciton be constantized
         const const_inst = switch (caller_tag) {
@@ -393,8 +413,7 @@ pub const Compiler = struct {
                 });
             } else {
                 // get the value into a register
-                try self.evalNode(pair.children.l);
-                const reg1 = self.last_reg;
+                const reg1 = try self.evalNode(pair.children.l);
                 // if we are doing arithmetic then we can do the const stuff
                 _ = try self.chunk.pushInst(.{
                     .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
@@ -426,8 +445,7 @@ pub const Compiler = struct {
 
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
-        try self.evalNode(pair.children.l);
-        const reg = self.last_reg;
+        const reg = try self.evalNode(pair.children.l);
         pair_idx = pair.children.r;
 
         // if we are using not then we only need the first item
@@ -473,7 +491,7 @@ pub const Compiler = struct {
 
             // compile this value
             pair = self.ast.nodes[pair_idx];
-            try self.evalNode(pair.children.l);
+            _ = try self.evalNode(pair.children.l);
 
             pair_idx = pair.children.r;
         }
@@ -763,6 +781,47 @@ test "set global" {
         // asign the the symbol in const[r] the value in reg1
         Inst.init(.set_global, .{ .u = 1, .r = 1 }),
         // return nothing
+        Inst.init(.ret, .{ .r = 0 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "locals" {
+    const code =
+        \\(let ((x 33)
+        \\      (y 44))
+        \\          (+ x y))
+    ;
+    var parser = Parser.init(testing.allocator);
+    defer parser.deinit();
+
+    var ast = try parser.parse(code);
+    defer ast.deinit(testing.allocator);
+
+    var chunk = Chunk.init(testing.allocator);
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+    try compiler.compile();
+
+    for (compiler.locals.keys[0..compiler.locals.idx]) |key, i| {
+        std.debug.print("({s}, {})\n", .{
+            key.loc.slice,
+            compiler.locals.values[i].reg,
+        });
+    }
+
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load 33 into reg 1
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // load 44 into reg 2
+        Inst.init(.load, .{ .r = 2, .u = 1 }),
+
+        // add the two registers
+        Inst.init(.add, .{ .r = 3, .r1 = 1, .r2 = 2 }),
+
         Inst.init(.ret, .{ .r = 0 }),
     }, chunk.code[0..chunk.n_inst]);
 }

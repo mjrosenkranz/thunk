@@ -11,7 +11,7 @@ pub const LocalList = Assoc(
     &compareToken,
 );
 
-pub inline fn compareToken(a: Token, b: Token) bool {
+pub fn compareToken(a: Token, b: Token) bool {
     return std.mem.eql(u8, a.loc.slice, b.loc.slice);
 }
 

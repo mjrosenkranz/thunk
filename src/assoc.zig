@@ -1,5 +1,9 @@
 const std = @import("std");
 
+pub const AssocError = error{
+    ExceedsCapacity,
+};
+
 pub fn Assoc(
     comptime N: usize,
     comptime K: type,
@@ -15,7 +19,7 @@ pub fn Assoc(
 
         /// creates a new association in the list
         pub fn assoc(self: *Self, k: K, v: V) !void {
-            if (self.idx >= N) return error.ExceedsCapacity;
+            if (self.idx >= N) return AssocError.ExceedsCapacity;
 
             self.keys[self.idx] = k;
             self.values[self.idx] = v;
