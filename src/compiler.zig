@@ -75,6 +75,8 @@ pub const Compiler = struct {
         self.last_reg -= 1;
     }
 
+    /// allocates a reg for an immediate or returns the
+    /// register if it is just a register
     fn toReg(self: *Compiler, slot: Slot) !Reg {
         return switch (slot) {
             .constant => |c| blk: {
@@ -86,6 +88,25 @@ pub const Compiler = struct {
                 break :blk reg;
             },
             .reg => |reg| reg,
+        };
+    }
+
+    /// places the constant in given register
+    /// or moves value from local register to given
+    /// returns the index of the instruction used
+    fn putInReg(self: *Compiler, slot: Slot, dest: Reg) !usize {
+        return switch (slot) {
+            .constant => |c| try self.chunk.pushInst(Inst.init(.load, .{
+                .r = dest,
+                .u = c,
+            })),
+            .reg => |reg| try self.chunk.pushInst(
+                Inst.init(.move, .{
+                    .r = dest,
+                    // the result of then should be in the latest register?
+                    .r1 = reg,
+                }),
+            ),
         };
     }
 
@@ -217,19 +238,7 @@ pub const Compiler = struct {
         // compile then
         const then_slot = try self.evalNode(if_node.children.l);
         // move the then branch
-        const thn_end_idx = switch (then_slot) {
-            .constant => |c| try self.chunk.pushInst(Inst.init(.load, .{
-                .r = res,
-                .u = c,
-            })),
-            .reg => |reg| try self.chunk.pushInst(
-                Inst.init(.move, .{
-                    .r = res,
-                    // the result of then should be in the latest register?
-                    .r1 = reg,
-                }),
-            ),
-        };
+        const thn_end_idx = try self.putInReg(then_slot, res);
 
         var thn_jump_amt = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx);
 
@@ -241,19 +250,8 @@ pub const Compiler = struct {
             );
             const else_slot = try self.evalNode(if_node.children.r);
             // move the else branch
-            const els_end_idx = switch (else_slot) {
-                .constant => |c| try self.chunk.pushInst(Inst.init(.load, .{
-                    .r = res,
-                    .u = c,
-                })),
-                .reg => |reg| try self.chunk.pushInst(
-                    Inst.init(.move, .{
-                        .r = res,
-                        // the result of then should be in the latest register?
-                        .r1 = reg,
-                    }),
-                ),
-            };
+            const els_end_idx = try self.putInReg(else_slot, res);
+
             self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx);
 
             // free the else register
@@ -439,15 +437,21 @@ pub const Compiler = struct {
             return CompileError.WrongNumberArguments;
         }
 
-        // const res_reg = self.allocReg();
+        const res_reg = try self.allocReg();
 
         // evaluate each item in the list
         var pair_idx = args_idx;
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
-        const reg0 = try self.evalNode(pair.children.l);
+
+        const first_slot = try self.evalNode(pair.children.l);
+
+        // regardless of what the first arg is, we need to put it
+        // in the result register
+        _ = try self.putInReg(first_slot, res_reg);
+
         pair_idx = pair.children.r;
-        // can the instruciton be constantized
+
         const const_inst = switch (caller_tag) {
             .plus,
             .minus,
@@ -457,40 +461,57 @@ pub const Compiler = struct {
             else => false,
         };
 
+        // var n_args_used: u8 = 0;
+
         // if the right child is 0 then we have reached the end of the list
         while (pair_idx != 0) {
             pair = self.ast.nodes[pair_idx];
-            // check if the value is a constant
-            const is_const = self.ast.nodes[pair.children.l].tag == .constant;
 
-            // apply primitive func to them and store in first register
-            if (const_inst and is_const) {
-                _ = try self.chunk.pushInst(.{
-                    .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
-                    .data = @bitCast(inst.ArgSize, inst.ArgU{
-                        .r = reg0,
-                        .u = try self.chunk.pushConst(
-                            self.ast.getData(Value, self.ast.nodes[pair.children.l].children.l),
-                        ),
-                    }),
-                });
-            } else {
-                // get the value into a register
-                const reg1 = try self.evalNode(pair.children.l);
-                // if we are doing arithmetic then we can do the const stuff
-                _ = try self.chunk.pushInst(.{
-                    .op = Op.fromPrimitiveTokenTag(caller_tag, is_const),
-                    .data = @bitCast(inst.ArgSize, inst.Arg3{
-                        .r = reg0,
-                        .r1 = reg0,
-                        .r2 = reg1,
-                    }),
-                });
+            const arg_slot = try self.evalNode(pair.children.l);
 
-                self.freeReg();
+            switch (arg_slot) {
+                .constant => |c| {
+                    // if this is an instruction that can use an immediate
+                    // then we can use that version
+                    if (const_inst) {
+                        _ = try self.chunk.pushInst(.{
+                            .op = Op.fromPrimitiveTokenTag(caller_tag, true),
+                            .data = @bitCast(inst.ArgSize, inst.ArgU{
+                                .r = res_reg,
+                                .u = c,
+                            }),
+                        });
+                    } else {
+                        // otherwise, we allocate a register for it
+                        const reg2 = try self.toReg(arg_slot);
+
+                        _ = try self.chunk.pushInst(.{
+                            .op = Op.fromPrimitiveTokenTag(caller_tag, false),
+                            .data = @bitCast(inst.ArgSize, inst.Arg3{
+                                .r = res_reg,
+                                .r1 = res_reg,
+                                .r2 = reg2,
+                            }),
+                        });
+                    }
+                },
+                // otherwise, we use the normal instruction
+                .reg => |r| {
+                    _ = try self.chunk.pushInst(.{
+                        .op = Op.fromPrimitiveTokenTag(caller_tag, false),
+                        .data = @bitCast(inst.ArgSize, inst.Arg3{
+                            .r = res_reg,
+                            .r1 = res_reg,
+                            .r2 = r,
+                        }),
+                    });
+                },
             }
+
             pair_idx = pair.children.r;
         }
+
+        return .{ .reg = res_reg };
     }
 
     fn applyBool(
@@ -832,7 +853,7 @@ test "primitive call" {
     try compiler.locals.assoc(.{
         .tag = .symbol,
         .loc = .{
-            .slice = code[8..9],
+            .slice = code[7..8],
         },
     }, .{
         .reg = 55,
@@ -841,7 +862,6 @@ test "primitive call" {
 
     try compiler.compile();
 
-    chunk.disassemble();
     try testing.expectEqualSlices(Inst, &.{
         // load 1 into 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
