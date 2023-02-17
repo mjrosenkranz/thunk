@@ -42,6 +42,11 @@ pub fn compile(src: []const u8, env: *Env, allocator: Allocator) CompileError!Ch
     return chunk;
 }
 
+const Slot = union(enum) {
+    reg: Reg,
+    constant: u16,
+};
+
 pub const Compiler = struct {
     ast: *Ast,
 
@@ -49,7 +54,8 @@ pub const Compiler = struct {
 
     locals: LocalList = .{},
 
-    /// the next free register
+    /// the next free register in our reg allocator
+    /// reg 0 is reserved to mean nothing I guess
     last_reg: Reg = 0,
 
     fn allocReg(self: *Compiler) !Reg {
@@ -69,89 +75,115 @@ pub const Compiler = struct {
         self.last_reg -= 1;
     }
 
+    fn toReg(self: *Compiler, slot: Slot) !Reg {
+        return switch (slot) {
+            .constant => |c| blk: {
+                const reg = try self.allocReg();
+                _ = try self.chunk.pushInst(Inst.init(.load, .{
+                    .r = reg,
+                    .u = c,
+                }));
+                break :blk reg;
+            },
+            .reg => |reg| reg,
+        };
+    }
+
     /// produces a new chunk from the Ast given
     /// we can assume that the Ast is for a single, top-level expression
     /// and therefore will only produce one chunk
     pub fn compile(self: *Compiler) CompileError!void {
         // start with the root
         // push return for for the last allocated register?
-        _ = try self.chunk.pushInst(Inst.init(.ret, .{
-            .r = try self.evalNode(0),
-        }));
+        // const slot = try self.evalNode(0);
+        // const reg = switch (slot) {
+        //     .constant => |c| blk: {
+        //         const reg = try self.allocReg();
+        //         _ = try self.chunk.pushInst(Inst.init(.load, .{
+        //             .r = reg,
+        //             .u = c,
+        //         }));
+        //         break :blk reg;
+        //     },
+        //     .reg => |reg| reg,
+        // };
+
+        _ = try self.chunk.pushInst(Inst.init(
+            .ret,
+            .{ .r = (try self.evalNode(0)).reg },
+        ));
     }
 
     fn evalNode(
         self: *Compiler,
         idx: NodeIdx,
-    ) CompileError!Reg {
+    ) CompileError!Slot {
         const node = self.ast.nodes[idx];
-        switch (node.tag) {
-            .constant => {
-                // push constant value into chunk
-                _ = try self.chunk.pushInst(Inst.init(
-                    .load,
-                    .{
-                        .r = try self.allocReg(),
-                        .u = try self.chunk.pushConst(
-                            self.ast.getData(Value, node.children.l),
-                        ),
-                    },
-                ));
+        return switch (node.tag) {
+            .constant => .{
+                .constant = try self.chunk.pushConst(
+                    self.ast.getData(Value, node.children.l),
+                ),
             },
-            .define => try self.applyDefine(idx),
-            .set => try self.applySet(idx),
-            .let => try self.applyLet(idx),
+            // .define => try self.applyDefine(idx),
+            // .set => try self.applySet(idx),
+            // .let => try self.applyLet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
-            .call => try self.applyNode(idx),
+            // .call => try self.applyNode(idx),
             .symbol => return try self.evalSymbol(idx),
             else => {
                 std.debug.print("bad node[{}]: {}\n", .{ idx, node.tag });
                 return CompileError.NotYetImplemented;
             },
-        }
-        return self.last_reg;
+        };
+        // return .{ .reg = self.last_reg };
     }
 
     fn evalSymbol(
         self: *Compiler,
         idx: NodeIdx,
-    ) CompileError!Reg {
+    ) CompileError!Slot {
         const symbol = self.ast.nodes[idx];
         // TOOD: intern strings so we don't have a string
         // pushed to the consts twice
         const symbol_tok = self.ast.tokens[symbol.token_idx];
         // first check if this is in our locals
         if (self.locals.get(symbol_tok)) |bind| {
-            return bind.reg;
+            return .{ .reg = bind.reg };
         } else {
-            // get the string into a constant
-            _ = try self.chunk.pushInst(Inst.init(
-                .get_global,
-                .{
-                    .r = try self.allocReg(),
-                    .u = try self.chunk.pushConstStr(
-                        self.ast.tokens[symbol.token_idx].loc.slice,
-                    ),
-                },
-            ));
+            std.debug.print("cannot find '{s}'\n", .{symbol_tok.loc.slice});
+            return error.NotYetImplemented;
+            // // get the string into a constant
+            // const reg = try self.allocReg();
+            // _ = try self.chunk.pushInst(Inst.init(
+            //     .get_global,
+            //     .{
+            //         .r = try self.allocReg(),
+            //         .u = try self.chunk.pushConstStr(
+            //             self.ast.tokens[symbol.token_idx].loc.slice,
+            //         ),
+            //     },
+            // ));
 
-            return self.last_reg;
+            // return .{ .reg = reg };
         }
     }
 
     fn evalSequence(
         self: *Compiler,
         idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         var seq_idx: NodeIdx = idx;
 
         while (true) {
             const seq = self.ast.nodes[seq_idx];
-            _ = try self.evalNode(seq.children.l);
+            const slot = try self.evalNode(seq.children.l);
+
+            const reg = try self.toReg(slot);
 
             if (seq.children.r == 0) {
-                break;
+                return .{ .reg = reg };
             } else {
                 // since there is another value,
                 // we should free this register
@@ -164,15 +196,16 @@ pub const Compiler = struct {
     fn applyCond(
         self: *Compiler,
         if_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         // where we will store the result.
         // we don't the result register since it will be used outside of the if scope
         const res = try self.allocReg();
+        // const res = self.last_reg;
 
         const if_node = self.ast.nodes[if_idx];
         // compile cond
         // we know that the result of compiling the condition should be in last reg
-        const cond_reg = try self.evalNode(if_idx + 1);
+        const cond_reg = try self.toReg(try self.evalNode(if_idx + 1));
         // add test
         _ = try self.chunk.pushInst(
             Inst.init(.eq_true, .{ .r = cond_reg }),
@@ -182,15 +215,21 @@ pub const Compiler = struct {
             Inst.init(.jmp, 0),
         );
         // compile then
-        const then_reg = try self.evalNode(if_node.children.l);
+        const then_slot = try self.evalNode(if_node.children.l);
         // move the then branch
-        const thn_end_idx = try self.chunk.pushInst(
-            Inst.init(.move, .{
+        const thn_end_idx = switch (then_slot) {
+            .constant => |c| try self.chunk.pushInst(Inst.init(.load, .{
                 .r = res,
-                // the result of then should be in the latest register?
-                .r1 = then_reg,
-            }),
-        );
+                .u = c,
+            })),
+            .reg => |reg| try self.chunk.pushInst(
+                Inst.init(.move, .{
+                    .r = res,
+                    // the result of then should be in the latest register?
+                    .r1 = reg,
+                }),
+            ),
+        };
 
         var thn_jump_amt = @intCast(inst.ArgI, thn_end_idx - thn_jump_idx);
 
@@ -200,14 +239,21 @@ pub const Compiler = struct {
             const els_jump_idx = try self.chunk.pushInst(
                 Inst.init(.jmp, 0),
             );
-            const else_reg = try self.evalNode(if_node.children.r);
+            const else_slot = try self.evalNode(if_node.children.r);
             // move the else branch
-            const els_end_idx = try self.chunk.pushInst(
-                Inst.init(.move, .{
+            const els_end_idx = switch (else_slot) {
+                .constant => |c| try self.chunk.pushInst(Inst.init(.load, .{
                     .r = res,
-                    .r1 = else_reg,
-                }),
-            );
+                    .u = c,
+                })),
+                .reg => |reg| try self.chunk.pushInst(
+                    Inst.init(.move, .{
+                        .r = res,
+                        // the result of then should be in the latest register?
+                        .r1 = reg,
+                    }),
+                ),
+            };
             self.chunk.code[els_jump_idx].data = @intCast(inst.ArgI, els_end_idx - els_jump_idx);
 
             // free the else register
@@ -215,12 +261,14 @@ pub const Compiler = struct {
         }
 
         // free the then register
-        self.freeReg();
+        // self.freeReg();
         // free the cond register
-        self.freeReg();
+        // self.freeReg();
 
         // patch the jump instruction
         self.chunk.code[thn_jump_idx].data = thn_jump_amt;
+
+        return .{ .reg = res };
     }
 
     fn applyDefine(
@@ -229,17 +277,32 @@ pub const Compiler = struct {
     ) CompileError!void {
         const def_node = self.ast.nodes[def_idx];
         // get the value by evaluating
-        const value_reg = try self.evalNode(def_node.children.r);
+        const slot = try self.evalNode(def_node.children.r);
 
         // create a symbol by evaluating
         // TODO: make this use a symbol data type directly
 
         // copy symbol name with allocator
         const lhs = self.ast.nodes[def_node.children.l];
+        switch (slot) {
+            .constant => {
+                _ = try self.chunk.pushInst(Inst.init(
+                    .define_global,
+                    .{
+                        .r = self.allocReg(),
+                        .u = try self.chunk.pushConstStr(
+                            self.ast.tokens[lhs.token_idx].loc.slice,
+                        ),
+                    },
+                ));
+            },
+        }
+        // allocate a register for the value
         _ = try self.chunk.pushInst(Inst.init(
             .define_global,
             .{
-                .r = value_reg,
+                // .r = value_reg,
+                .r = 0,
                 .u = try self.chunk.pushConstStr(
                     self.ast.tokens[lhs.token_idx].loc.slice,
                 ),
@@ -528,6 +591,45 @@ test "compile number literal" {
     try compiler.compile();
 
     try std.testing.expectApproxEqAbs(@as(f32, 32), chunk.consts[0].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load the number
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "compile two number literals" {
+    const code =
+        \\32
+        \\55
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    var chunk = Chunk{};
+    defer chunk.deinit();
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+    try compiler.compile();
+
+    try std.testing.expectApproxEqAbs(@as(f32, 32), chunk.consts[0].float, eps);
+    try std.testing.expectApproxEqAbs(@as(f32, 55), chunk.consts[1].float, eps);
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load the number
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // load the other number
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
 }
 
 test "if statement" {
@@ -560,18 +662,15 @@ test "if statement" {
         // test if r1 is false (test skips over jump if false)
         Inst.init(.eq_true, .{ .r = 2 }),
         // jump over thn branch
-        Inst.init(.jmp, 3),
+        Inst.init(.jmp, 2),
         // thn branch
         // load 12 into r3
-        Inst.init(.load, .{ .r = 3, .u = 1 }),
-        // move into result register
-        Inst.init(.move, .{ .r = 1, .r1 = 3 }),
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
         // jump over else branch
-        Inst.init(.jmp, 2),
+        Inst.init(.jmp, 1),
         //-----------------------------
         // else branch
-        Inst.init(.load, .{ .r = 4, .u = 2 }),
-        Inst.init(.move, .{ .r = 1, .r1 = 4 }),
+        Inst.init(.load, .{ .r = 1, .u = 2 }),
         // -----------------------
         // return
         Inst.init(.ret, .{ .r = 1 }),
@@ -596,12 +695,118 @@ test "if no else" {
         // test if r1 is false (test skips over jump if false)
         Inst.init(.eq_true, .{ .r = 2 }),
         // jump over thn branch
+        Inst.init(.jmp, 1),
+        // thn branch
+        // load 12 into r3
+        Inst.init(.load, .{ .r = 1, .u = 1 }),
+        // -----------------------
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "if with var in cond" {
+    const code =
+        \\(if x 12)
+    ;
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    var chunk = Chunk{};
+    defer chunk.deinit();
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .line = 1,
+            .col = 5,
+            .slice = code[4..5],
+        },
+    }, .{
+        .reg = 55,
+        .depth = 0,
+    });
+    try compiler.compile();
+
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // test if r1 is false (test skips over jump if false)
+        Inst.init(.eq_true, .{ .r = 55 }),
+        // jump over thn branch
+        Inst.init(.jmp, 1),
+        // thn branch
+        // load 12 into r3
+        Inst.init(.load, .{ .r = 1, .u = 0 }),
+        // -----------------------
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
+test "if with var in then else" {
+    const code =
+        \\(if #f thn els)
+    ;
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    var chunk = Chunk{};
+    defer chunk.deinit();
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .slice = code[7..10],
+        },
+    }, .{
+        .reg = 55,
+        .depth = 0,
+    });
+
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .slice = code[11..14],
+        },
+    }, .{
+        .reg = 33,
+        .depth = 0,
+    });
+    try compiler.compile();
+
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load the test
+        Inst.init(.load, .{ .r = 2, .u = 0 }),
+        // test if r1 is false (test skips over jump if false)
+        Inst.init(.eq_true, .{ .r = 2 }),
+        // jump over thn branch
         Inst.init(.jmp, 2),
         // thn branch
         // load 12 into r3
-        Inst.init(.load, .{ .r = 3, .u = 1 }),
-        // move into result register
-        Inst.init(.move, .{ .r = 1, .r1 = 3 }),
+        Inst.init(.move, .{ .r = 1, .r1 = 55 }),
+        // jump over else branch
+        Inst.init(.jmp, 1),
+        //-----------------------------
+        // else branch
+        Inst.init(.move, .{ .r = 1, .r1 = 33 }),
         // -----------------------
         // return
         Inst.init(.ret, .{ .r = 1 }),
