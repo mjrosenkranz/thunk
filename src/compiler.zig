@@ -130,7 +130,7 @@ pub const Compiler = struct {
             // .let => try self.applyLet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
-            // .call => try self.applyNode(idx),
+            .call => try self.applyNode(idx),
             .symbol => return try self.evalSymbol(idx),
             else => {
                 std.debug.print("bad node[{}]: {}\n", .{ idx, node.tag });
@@ -395,7 +395,7 @@ pub const Compiler = struct {
     fn applyNode(
         self: *Compiler,
         call_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         const call_node = self.ast.nodes[call_idx];
         const call_data = self.ast.getData(FnCall, call_node.children.l);
         const caller = self.ast.nodes[call_data.caller_idx];
@@ -415,10 +415,10 @@ pub const Compiler = struct {
             .gte,
             .lte,
             => self.applyBinOp(caller_tag, call_data, args_idx),
-            .@"and",
-            .@"or",
-            .@"not",
-            => self.applyBool(caller_tag, call_data, args_idx),
+            // .@"and",
+            // .@"or",
+            // .@"not",
+            // => self.applyBool(caller_tag, call_data, args_idx),
             // haven't implemented any other functions
             else => CompileError.NotYetImplemented,
         };
@@ -429,7 +429,7 @@ pub const Compiler = struct {
         caller_tag: Token.Tag,
         call_data: FnCall,
         args_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         // if we are using modulo then check arity
         if (caller_tag == .modulo and call_data.n_args != 2) {
             return CompileError.WrongNumberArguments;
@@ -498,7 +498,7 @@ pub const Compiler = struct {
         caller_tag: Token.Tag,
         call_data: FnCall,
         args_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         if (call_data.n_args == 0) {
             return CompileError.WrongNumberArguments;
         }
@@ -790,8 +790,6 @@ test "if with var in then else" {
     });
     try compiler.compile();
 
-    chunk.disassemble();
-
     try testing.expectEqualSlices(Inst, &.{
         // load the test
         Inst.init(.load, .{ .r = 2, .u = 0 }),
@@ -815,20 +813,42 @@ test "if with var in then else" {
 
 test "primitive call" {
     const code =
-        \\(+ 1 2 3)
+        \\(+ 1 2 x)
     ;
     var env = Env.init(testing.allocator);
     defer env.deinit();
-    var chunk = try compile(code, &env, std.testing.allocator);
-    defer chunk.deinit();
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
 
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    var chunk = Chunk{};
+    defer chunk.deinit();
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .slice = code[8..9],
+        },
+    }, .{
+        .reg = 55,
+        .depth = 0,
+    });
+
+    try compiler.compile();
+
+    chunk.disassemble();
     try testing.expectEqualSlices(Inst, &.{
         // load 1 into 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // add them together and store in 1
         Inst.init(.addconst, .{ .r = 1, .u = 1 }),
         // load 3 into 2 (we popped 2 off since we don't need it anymore)
-        Inst.init(.addconst, .{ .r = 1, .u = 2 }),
+        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 55 }),
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
