@@ -277,6 +277,8 @@ pub fn parseForm(
             try self.consume(.begin, ParseError.ExpectedBegin);
             break :blk try self.parseSeq();
         },
+        // TODO: should not be allowed inside an expression:
+        // (let ((y (define x 5))) y)
         .define => try self.parseDefine(),
         .set => try self.parseSet(),
         .let => try self.parseLet(),

@@ -131,8 +131,8 @@ pub const Compiler = struct {
                     self.ast.getData(Value, node.children.l),
                 ),
             },
-            // .define => try self.applyDefine(idx),
-            // .set => try self.applySet(idx),
+            .define => try self.applyDefine(idx),
+            .set => try self.applySet(idx),
             // .let => try self.applyLet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
@@ -143,7 +143,6 @@ pub const Compiler = struct {
                 return CompileError.NotYetImplemented;
             },
         };
-        // return .{ .reg = self.last_reg };
     }
 
     fn evalSymbol(
@@ -257,35 +256,23 @@ pub const Compiler = struct {
     fn applyDefine(
         self: *Compiler,
         def_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         const def_node = self.ast.nodes[def_idx];
-        // get the value by evaluating
+        // get the value by evaluating and put into a new register
+        const value_reg = try self.allocReg();
         const slot = try self.evalNode(def_node.children.r);
+        _ = try self.putInReg(slot, value_reg);
 
         // create a symbol by evaluating
         // TODO: make this use a symbol data type directly
 
         // copy symbol name with allocator
         const lhs = self.ast.nodes[def_node.children.l];
-        switch (slot) {
-            .constant => {
-                _ = try self.chunk.pushInst(Inst.init(
-                    .define_global,
-                    .{
-                        .r = self.allocReg(),
-                        .u = try self.chunk.pushConstStr(
-                            self.ast.tokens[lhs.token_idx].loc.slice,
-                        ),
-                    },
-                ));
-            },
-        }
         // allocate a register for the value
         _ = try self.chunk.pushInst(Inst.init(
             .define_global,
             .{
-                // .r = value_reg,
-                .r = 0,
+                .r = value_reg,
                 .u = try self.chunk.pushConstStr(
                     self.ast.tokens[lhs.token_idx].loc.slice,
                 ),
@@ -294,6 +281,41 @@ pub const Compiler = struct {
 
         // pop the register used for value
         self.freeReg();
+
+        // return nothing
+        return .{ .reg = 0 };
+    }
+
+    fn applySet(
+        self: *Compiler,
+        def_idx: NodeIdx,
+    ) CompileError!Slot {
+        const def_node = self.ast.nodes[def_idx];
+        // get the value by evaluating
+        const value_reg = try self.allocReg();
+        const slot = try self.evalNode(def_node.children.r);
+        _ = try self.putInReg(slot, value_reg);
+
+        // create a symbol by evaluating
+        // TODO: make this use a symbol data type directly
+        // TODO: instructions should change if this is a local variable
+
+        // copy symbol name with allocator
+        const lhs = self.ast.nodes[def_node.children.l];
+        _ = try self.chunk.pushInst(Inst.init(
+            .set_global,
+            .{
+                .r = value_reg,
+                .u = try self.chunk.pushConstStr(
+                    self.ast.tokens[lhs.token_idx].loc.slice,
+                ),
+            },
+        ));
+
+        // pop the register used for value
+        self.freeReg();
+        // return nothing
+        return .{ .reg = 0 };
     }
 
     fn applyLet(
@@ -344,33 +366,6 @@ pub const Compiler = struct {
 
         // TODO: pop all consumed registers
         // TODO: pop them from the assoc list as well
-    }
-
-    fn applySet(
-        self: *Compiler,
-        def_idx: NodeIdx,
-    ) CompileError!void {
-        const def_node = self.ast.nodes[def_idx];
-        // get the value by evaluating
-        const value_reg = try self.evalNode(def_node.children.r);
-
-        // create a symbol by evaluating
-        // TODO: make this use a symbol data type directly
-
-        // copy symbol name with allocator
-        const lhs = self.ast.nodes[def_node.children.l];
-        _ = try self.chunk.pushInst(Inst.init(
-            .set_global,
-            .{
-                .r = value_reg,
-                .u = try self.chunk.pushConstStr(
-                    self.ast.tokens[lhs.token_idx].loc.slice,
-                ),
-            },
-        ));
-
-        // pop the register used for value
-        self.freeReg();
     }
 
     /// apply a call
