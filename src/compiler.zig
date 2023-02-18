@@ -157,21 +157,19 @@ pub const Compiler = struct {
         if (self.locals.get(symbol_tok)) |bind| {
             return .{ .reg = bind.reg };
         } else {
-            std.debug.print("cannot find '{s}'\n", .{symbol_tok.loc.slice});
-            return error.NotYetImplemented;
-            // // get the string into a constant
-            // const reg = try self.allocReg();
-            // _ = try self.chunk.pushInst(Inst.init(
-            //     .get_global,
-            //     .{
-            //         .r = try self.allocReg(),
-            //         .u = try self.chunk.pushConstStr(
-            //             self.ast.tokens[symbol.token_idx].loc.slice,
-            //         ),
-            //     },
-            // ));
+            // get the string into a constant
+            const reg = try self.allocReg();
+            _ = try self.chunk.pushInst(Inst.init(
+                .get_global,
+                .{
+                    .r = reg,
+                    .u = try self.chunk.pushConstStr(
+                        self.ast.tokens[symbol.token_idx].loc.slice,
+                    ),
+                },
+            ));
 
-            // return .{ .reg = reg };
+            return .{ .reg = reg };
         }
     }
 
@@ -1039,8 +1037,6 @@ test "locals" {
             compiler.locals.values[i].reg,
         });
     }
-
-    chunk.disassemble();
 
     try testing.expectEqualSlices(Inst, &.{
         // load 33 into reg 1
