@@ -114,21 +114,6 @@ pub const Compiler = struct {
     /// we can assume that the Ast is for a single, top-level expression
     /// and therefore will only produce one chunk
     pub fn compile(self: *Compiler) CompileError!void {
-        // start with the root
-        // push return for for the last allocated register?
-        // const slot = try self.evalNode(0);
-        // const reg = switch (slot) {
-        //     .constant => |c| blk: {
-        //         const reg = try self.allocReg();
-        //         _ = try self.chunk.pushInst(Inst.init(.load, .{
-        //             .r = reg,
-        //             .u = c,
-        //         }));
-        //         break :blk reg;
-        //     },
-        //     .reg => |reg| reg,
-        // };
-
         _ = try self.chunk.pushInst(Inst.init(
             .ret,
             .{ .r = (try self.evalNode(0)).reg },
@@ -413,10 +398,10 @@ pub const Compiler = struct {
             .gte,
             .lte,
             => self.applyBinOp(caller_tag, call_data, args_idx),
-            // .@"and",
-            // .@"or",
-            // .@"not",
-            // => self.applyBool(caller_tag, call_data, args_idx),
+            .@"and",
+            .@"or",
+            .@"not",
+            => self.applyBool(caller_tag, call_data, args_idx),
             // haven't implemented any other functions
             else => CompileError.NotYetImplemented,
         };
@@ -524,12 +509,15 @@ pub const Compiler = struct {
             return CompileError.WrongNumberArguments;
         }
 
+        const res_reg = try self.allocReg();
         // evaluate each item in the list
         var pair_idx = args_idx;
 
         // load the first item into a register
         var pair = self.ast.nodes[pair_idx];
-        const reg = try self.evalNode(pair.children.l);
+        const first_slot = try self.evalNode(pair.children.l);
+        _ = try self.putInReg(first_slot, res_reg);
+
         pair_idx = pair.children.r;
 
         // if we are using not then we only need the first item
@@ -540,12 +528,12 @@ pub const Compiler = struct {
 
             _ = try self.chunk.pushInst(
                 Inst.init(.@"not", .{
-                    .r = reg,
-                    .r1 = reg,
+                    .r = res_reg,
+                    .r1 = res_reg,
                 }),
             );
 
-            return;
+            return .{ .reg = res_reg };
         }
 
         // index where we start adding jumps
@@ -554,15 +542,15 @@ pub const Compiler = struct {
         const compare: Reg = switch (caller_tag) {
             .@"or" => 1,
             .@"and" => 0,
-            else => return CompileError.NotYetImplemented,
+            else => unreachable,
         };
 
         while (pair_idx != 0) {
             // test the last value
             _ = try self.chunk.pushInst(
                 Inst.init(.@"test", .{
-                    .r = reg,
-                    .r1 = reg,
+                    .r = res_reg,
+                    .r1 = res_reg,
                     .r2 = compare,
                 }),
             );
@@ -570,12 +558,10 @@ pub const Compiler = struct {
             _ = try self.chunk.pushInst(
                 Inst.init(.jmp, 0),
             );
-            // free reg, since we only used it in the test instruction
-            self.freeReg();
 
             // compile this value
             pair = self.ast.nodes[pair_idx];
-            _ = try self.evalNode(pair.children.l);
+            _ = try self.putInReg(try self.evalNode(pair.children.l), res_reg);
 
             pair_idx = pair.children.r;
         }
@@ -588,6 +574,11 @@ pub const Compiler = struct {
                 jmp.data = jmp_amt;
             }
         }
+
+        // free reg, since we only used it in the test instruction
+        // self.freeReg();
+
+        return .{ .reg = res_reg };
     }
 };
 
@@ -755,8 +746,6 @@ test "if with var in cond" {
         .depth = 0,
     });
     try compiler.compile();
-
-    chunk.disassemble();
 
     try testing.expectEqualSlices(Inst, &.{
         // test if r1 is false (test skips over jump if false)
