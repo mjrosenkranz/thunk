@@ -145,7 +145,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .sub => {
-                std.debug.print(offset_fmt ++ "sub: reg[{}] = reg[{}] + reg[{}]\n", .{
+                std.debug.print(offset_fmt ++ "sub: reg[{}] = reg[{}] - reg[{}]\n", .{
                     offset,
                     self.arg3().r,
                     self.arg3().r1,
@@ -153,7 +153,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .subconst => {
-                std.debug.print(offset_fmt ++ "subconst: reg[{}] = reg[{}] + const[{}]\n", .{
+                std.debug.print(offset_fmt ++ "subconst: reg[{}] = reg[{}] - const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -161,7 +161,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .mul => {
-                std.debug.print(offset_fmt ++ "mul: reg[{}] = reg[{}] + reg[{}]\n", .{
+                std.debug.print(offset_fmt ++ "mul: reg[{}] = reg[{}] * reg[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -169,7 +169,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .mulconst => {
-                std.debug.print(offset_fmt ++ "mulconst: reg[{}] = reg[{}] + const[{}]\n", .{
+                std.debug.print(offset_fmt ++ "mulconst: reg[{}] = reg[{}] * const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -178,7 +178,7 @@ pub const Inst = packed struct(InstSize) {
             },
 
             .div => {
-                std.debug.print(offset_fmt ++ "div: reg[{}] = reg[{}] + reg[{}]\n", .{
+                std.debug.print(offset_fmt ++ "div: reg[{}] = reg[{}] / reg[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
@@ -186,7 +186,7 @@ pub const Inst = packed struct(InstSize) {
                 });
             },
             .divconst => {
-                std.debug.print(offset_fmt ++ "divconst: reg[{}] = reg[{}] + const[{}]\n", .{
+                std.debug.print(offset_fmt ++ "divconst: reg[{}] = reg[{}] / const[{}]\n", .{
                     offset,
                     self.argu().r,
                     self.argu().r,
