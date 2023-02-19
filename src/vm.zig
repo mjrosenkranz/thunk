@@ -503,7 +503,7 @@ test "addition many" {
 
 test "nested arithmetic" {
     const code =
-        \\(+ (/ 12 3) (- 2 3) (* 3 2))
+        \\(+ (/ 12 3) (- 4 5) (* 3 2))
     ;
     var vm = Vm.initConfig(TestConfig, testing.allocator);
     defer vm.deinit();
@@ -514,12 +514,41 @@ test "nested arithmetic" {
     defer env.deinit();
     try testing.expect(chunk.consts[0].float == 12);
     try testing.expect(chunk.consts[1].float == 3);
-    try testing.expect(chunk.consts[2].float == 2);
-    try testing.expect(chunk.consts[3].float == 3);
+    try testing.expect(chunk.consts[2].float == 4);
+    try testing.expect(chunk.consts[3].float == 5);
     try testing.expect(chunk.consts[4].float == 3);
     try testing.expect(chunk.consts[5].float == 2);
 
     try vm.exec(&chunk);
+    chunk.disassemble();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // reserve reg 1 for result of addition
+
+        // load 12 into reg 2
+        Inst.init(.load, .{ .r = 2, .u = 0 }),
+        // div reg2 by 3
+        Inst.init(.divconst, .{ .r = 2, .u = 1 }),
+
+        // load 4 to reg 3
+        Inst.init(.load, .{ .r = 3, .u = 2 }),
+        // sub 5 from reg3
+        Inst.init(.subconst, .{ .r = 3, .u = 3 }),
+
+        // add first two results
+        Inst.init(.add, .{ .r = 1, .r1 = 2, .r2 = 3 }),
+
+        // load 3 into reg 4
+        // mul reg4 by 2
+        Inst.init(.load, .{ .r = 4, .u = 4 }),
+        Inst.init(.mulconst, .{ .r = 4, .u = 5 }),
+
+        // add last result
+        Inst.init(.add, .{ .r = 1, .r1 = 1, .r2 = 4 }),
+
+        // return nothing
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
 
     try testing.expect(vm.regs[1].float == 9);
 }

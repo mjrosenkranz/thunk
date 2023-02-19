@@ -343,15 +343,15 @@ pub const Compiler = struct {
         // node we getting the binding from
         var b_node = self.ast.nodes[alist_idx];
         while (true) {
-
-            // (x 33)
             const binding = self.ast.nodes[b_node.children.l];
 
             // TODO: assert that this is a symbol?
             const symbol = self.ast.nodes[binding.children.l];
+            const symbol_tok = self.ast.tokens[symbol.token_idx];
+            if (symbol_tok.tag != .symbol) return CompileError.ExpectedSymbol;
 
             // compile the binding
-            try self.locals.assoc(self.ast.tokens[symbol.token_idx], .{
+            try self.locals.assoc(symbol_tok, .{
                 .reg = try self.toReg(try self.evalNode(binding.children.r)),
                 .depth = 0,
             });
@@ -427,7 +427,14 @@ pub const Compiler = struct {
 
         // regardless of what the first arg is, we need to put it
         // in the result register
-        _ = try self.putInReg(first_slot, res_reg);
+        // _ = try self.putInReg(first_slot, res_reg);
+        var last_reg = switch (first_slot) {
+            .constant => blk: {
+                _ = try self.putInReg(first_slot, res_reg);
+                break :blk res_reg;
+            },
+            .reg => |r| r,
+        };
 
         pair_idx = pair.children.r;
 
@@ -480,10 +487,11 @@ pub const Compiler = struct {
                         .op = Op.fromPrimitiveTokenTag(caller_tag, false),
                         .data = @bitCast(inst.ArgSize, inst.Arg3{
                             .r = res_reg,
-                            .r1 = res_reg,
+                            .r1 = last_reg,
                             .r2 = r,
                         }),
                     });
+                    last_reg = res_reg;
                 },
             }
 
@@ -857,6 +865,54 @@ test "primitive call" {
     }, chunk.code[0..chunk.n_inst]);
 }
 
+test "add vars" {
+    const code =
+        \\(+ y x)
+    ;
+    var env = Env.init(testing.allocator);
+    defer env.deinit();
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+    var chunk = Chunk{};
+    defer chunk.deinit();
+    var compiler = Compiler{
+        .chunk = &chunk,
+        .ast = &ast,
+    };
+
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .slice = code[3..4],
+        },
+    }, .{
+        .reg = 33,
+        .depth = 0,
+    });
+
+    try compiler.locals.assoc(.{
+        .tag = .symbol,
+        .loc = .{
+            .slice = code[5..6],
+        },
+    }, .{
+        .reg = 55,
+        .depth = 0,
+    });
+
+    try compiler.compile();
+
+    try testing.expectEqualSlices(Inst, &.{
+        // load 3 into 2 (we popped 2 off since we don't need it anymore)
+        Inst.init(.add, .{ .r = 1, .r1 = 33, .r2 = 55 }),
+        // return
+        Inst.init(.ret, .{ .r = 1 }),
+    }, chunk.code[0..chunk.n_inst]);
+}
+
 test "and" {
     const code =
         \\(and #t 33)
@@ -1032,13 +1088,6 @@ test "locals" {
     };
     try compiler.compile();
 
-    for (compiler.locals.keys[0..compiler.locals.idx], 0..) |key, i| {
-        std.debug.print("({s}, {})\n", .{
-            key.loc.slice,
-            compiler.locals.values[i].reg,
-        });
-    }
-
     try testing.expectEqualSlices(Inst, &.{
         // load 33 into reg 1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
@@ -1048,6 +1097,6 @@ test "locals" {
         // add the two registers
         Inst.init(.add, .{ .r = 3, .r1 = 1, .r2 = 2 }),
 
-        Inst.init(.ret, .{ .r = 0 }),
+        Inst.init(.ret, .{ .r = 3 }),
     }, chunk.code[0..chunk.n_inst]);
 }
