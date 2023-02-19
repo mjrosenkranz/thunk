@@ -19,6 +19,7 @@ const LocalList = @import("locals.zig").LocalList;
 pub const CompileError = error{
     OutOfRegisters,
     WrongNumberArguments,
+    ExpectedSymbol,
     NotYetImplemented,
 } || Chunk.ChunkError || Parser.ParseError || @import("assoc.zig").AssocError;
 
@@ -133,7 +134,7 @@ pub const Compiler = struct {
             },
             .define => try self.applyDefine(idx),
             .set => try self.applySet(idx),
-            // .let => try self.applyLet(idx),
+            .let => try self.applyLet(idx),
             .seq => try self.evalSequence(idx),
             .@"if" => try self.applyCond(idx),
             .call => try self.applyNode(idx),
@@ -319,7 +320,7 @@ pub const Compiler = struct {
     fn applyLet(
         self: *Compiler,
         let_idx: NodeIdx,
-    ) CompileError!void {
+    ) CompileError!Slot {
         const let = self.ast.nodes[let_idx];
         const alist_idx = let.children.l;
 
@@ -347,11 +348,11 @@ pub const Compiler = struct {
             const binding = self.ast.nodes[b_node.children.l];
 
             // TODO: assert that this is a symbol?
-            const variable = self.ast.nodes[binding.children.l];
+            const symbol = self.ast.nodes[binding.children.l];
 
             // compile the binding
-            try self.locals.assoc(self.ast.tokens[variable.token_idx], .{
-                .reg = try self.evalNode(binding.children.r),
+            try self.locals.assoc(self.ast.tokens[symbol.token_idx], .{
+                .reg = try self.toReg(try self.evalNode(binding.children.r)),
                 .depth = 0,
             });
 
@@ -360,7 +361,7 @@ pub const Compiler = struct {
         }
 
         // compile body
-        _ = try self.evalNode(let.children.r);
+        return try self.evalNode(let.children.r);
 
         // TODO: pop all consumed registers
         // TODO: pop them from the assoc list as well
@@ -393,7 +394,7 @@ pub const Compiler = struct {
             => self.applyBinOp(caller_tag, call_data, args_idx),
             .@"and",
             .@"or",
-            .@"not",
+            .not,
             => self.applyBool(caller_tag, call_data, args_idx),
             // haven't implemented any other functions
             else => CompileError.NotYetImplemented,
@@ -514,13 +515,13 @@ pub const Compiler = struct {
         pair_idx = pair.children.r;
 
         // if we are using not then we only need the first item
-        if (caller_tag == .@"not") {
+        if (caller_tag == .not) {
             if (call_data.n_args != 1) {
                 return CompileError.WrongNumberArguments;
             }
 
             _ = try self.chunk.pushInst(
-                Inst.init(.@"not", .{
+                Inst.init(.not, .{
                     .r = res_reg,
                     .r1 = res_reg,
                 }),
@@ -561,7 +562,7 @@ pub const Compiler = struct {
 
         // patch all the instructions
         const done_idx = self.chunk.n_inst - 1;
-        for (self.chunk.code[start_idx..done_idx]) |*jmp, i| {
+        for (self.chunk.code[start_idx..done_idx], 0..) |*jmp, i| {
             if (jmp.op == .jmp) {
                 const jmp_amt = @intCast(inst.ArgI, done_idx - (start_idx + i));
                 jmp.data = jmp_amt;
@@ -935,7 +936,7 @@ test "not" {
         // load arg1 into reg1
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // test if reg1 is false, and store in reg 1
-        Inst.init(.@"not", .{ .r = 1, .r1 = 1 }),
+        Inst.init(.not, .{ .r = 1, .r1 = 1 }),
         // return
         Inst.init(.ret, .{ .r = 1 }),
     }, chunk.code[0..chunk.n_inst]);
@@ -1031,7 +1032,7 @@ test "locals" {
     };
     try compiler.compile();
 
-    for (compiler.locals.keys[0..compiler.locals.idx]) |key, i| {
+    for (compiler.locals.keys[0..compiler.locals.idx], 0..) |key, i| {
         std.debug.print("({s}, {})\n", .{
             key.loc.slice,
             compiler.locals.values[i].reg,

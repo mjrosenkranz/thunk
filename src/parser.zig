@@ -27,6 +27,7 @@ pub const ParseError = error{
     FormFailed,
     ExceededMaxArgs,
     ExpectedBegin,
+    ExpectedIf,
 
     SyntaxError,
 } || Allocator.Error || error{NotYetImplemented};
@@ -143,9 +144,9 @@ pub fn parse(self: *Parser, src: []const u8) ParseError!Ast {
     }
 
     return Ast{
-        .tokens = self.tokens.toOwnedSlice(),
-        .nodes = self.nodes.toOwnedSlice(),
-        .data = self.data.toOwnedSlice(),
+        .tokens = try self.tokens.toOwnedSlice(),
+        .nodes = try self.nodes.toOwnedSlice(),
+        .data = try self.data.toOwnedSlice(),
     };
 }
 
@@ -157,8 +158,8 @@ pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
     if (self.curr.tag == .eof) return 0;
     return switch (self.curr.tag) {
         .number => try self.parseNum(),
-        .@"false",
-        .@"true",
+        .false,
+        .true,
         => try self.parseBool(),
         // these are all builtin symbols
         .plus,
@@ -173,7 +174,7 @@ pub fn parseExpr(self: *Parser) ParseError!NodeIdx {
         .symbol,
         .@"and",
         .@"or",
-        .@"not",
+        .not,
         => try self.parseSymbol(),
         .lparen => try self.parseForm(),
         .rparen => {
@@ -222,7 +223,7 @@ pub fn parseNum(
 pub fn parseBool(
     self: *Parser,
 ) ParseError!NodeIdx {
-    var b: bool = self.curr.tag == .@"true";
+    var b: bool = self.curr.tag == .true;
     const data_idx = try self.pushData(Value, .{ .boolean = b });
 
     // push the token

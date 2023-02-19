@@ -30,7 +30,7 @@ pub fn Assoc(
         /// removes an association from the list
         /// if the key cannot be found, does nothing
         pub fn dissoc(self: *Self, k: K) void {
-            for (self.keys[0..self.idx]) |o, i| {
+            for (self.keys[0..self.idx], 0..) |o, i| {
                 if (Eq(k, o)) {
                     // if this is the last idx then we done
                     self.idx -= 1;
@@ -46,7 +46,7 @@ pub fn Assoc(
 
         /// returns the value associated with the key, if there is one
         pub fn get(self: Self, k: K) ?V {
-            for (self.keys[0..self.idx]) |o, i| {
+            for (self.keys[0..self.idx], 0..) |o, i| {
                 if (Eq(k, o)) {
                     return self.values[i];
                 }

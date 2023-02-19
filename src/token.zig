@@ -26,8 +26,8 @@ pub const Tag = enum {
     symbol,
     keyword,
     number,
-    @"false",
-    @"true",
+    false,
+    true,
 
     // --- builtin symbols ---
 
@@ -45,7 +45,7 @@ pub const Tag = enum {
     // boolean logic
     @"and",
     @"or",
-    @"not",
+    not,
 
     // ---------------------
 

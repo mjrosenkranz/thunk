@@ -78,7 +78,7 @@ fn defn(comptime f: anytype) NativeFnDef {
     const info = @typeInfo(F).Fn;
 
     var def = NativeFnDef{};
-    comptime for (info.args) |p, i| {
+    comptime for (info.args, 0..) |p, i| {
         if (p.arg_type) |T| {
             def.args[i] = switch (@typeInfo(T)) {
                 .Float => .float,
@@ -94,7 +94,7 @@ fn defn(comptime f: anytype) NativeFnDef {
             std.debug.assert(d.n_args == args.len);
 
             comptime var fields: [info.args.len]std.builtin.Type.StructField = undefined;
-            inline for (info.args) |arg, i| {
+            inline for (info.args, 0..) |arg, i| {
                 fields[i] = std.builtin.Type.StructField{
                     .name = nums[i],
                     .field_type = arg.arg_type.?,
@@ -114,7 +114,7 @@ fn defn(comptime f: anytype) NativeFnDef {
 
             const T = @Type(st);
             var t: T = undefined;
-            inline for (std.meta.fields(T)) |fi, i| {
+            inline for (std.meta.fields(T), 0..) |fi, i| {
                 @field(t, fi.name) = args[i].to(fi.field_type).?;
             }
 

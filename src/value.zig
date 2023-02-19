@@ -24,7 +24,7 @@ pub const String = struct {
 
         var bytes = @ptrCast([*]u8, &str_ptr.bytes);
 
-        for (str) |b, i| {
+        for (str, 0..) |b, i| {
             bytes[i] = b;
         }
 

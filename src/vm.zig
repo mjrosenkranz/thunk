@@ -144,7 +144,7 @@ pub const Vm = struct {
                     self.ip += 1;
                 }
             },
-            .@"not" => {
+            .not => {
                 const args = inst.arg3();
                 const r1 = self.regs[args.r1].truthy();
                 self.regs[args.r] = Value{ .boolean = !r1 };

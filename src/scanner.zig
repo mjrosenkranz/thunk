@@ -161,9 +161,9 @@ pub const Scanner = struct {
                 .sharp => {
                     // next character should be t for true and f for false
                     if (c == 't') {
-                        tok.tag = .@"true";
+                        tok.tag = .true;
                     } else if (c == 'f') {
-                        tok.tag = .@"false";
+                        tok.tag = .false;
                     } else {
                         tok.tag = .unknown;
                     }
@@ -310,7 +310,7 @@ pub const Scanner = struct {
     pub fn compareId(self: *Self, id: []const u8) bool {
         // cant fit in the rest of the buffer so cant match
         if (self.offset + id.len > self.buf.len) return false;
-        for (id) |item, index| {
+        for (id, 0..) |item, index| {
             if (self.buf[self.offset + index] != item) return false;
         }
 
@@ -400,7 +400,7 @@ pub const Scanner = struct {
             },
             'n' => {
                 if (self.compareId("not")) {
-                    return .@"not";
+                    return .not;
                 }
             },
             'o' => {
@@ -489,7 +489,7 @@ pub fn testScanner(
     var scan = Scanner{
         .buf = src,
     };
-    for (strs) |str, i| {
+    for (strs, 0..) |str, i| {
         const t = scan.next();
         if (str.len > 0) {
             try testing.expect(std.mem.eql(
@@ -511,7 +511,7 @@ pub fn testScannerLoc(
     var scan = Scanner{
         .buf = src,
     };
-    for (strs) |str, i| {
+    for (strs, 0..) |str, i| {
         const t = scan.next();
         if (str.len > 0) {
             try testing.expect(std.mem.eql(
@@ -550,7 +550,7 @@ pub fn testScannerTokens(
     var scan = Scanner{
         .buf = src,
     };
-    for (strs) |str, i| {
+    for (strs, 0..) |str, i| {
         const t = scan.next();
         try testing.expect(std.mem.eql(
             u8,
@@ -707,8 +707,8 @@ test "literals" {
         "#f",
     };
     const expected_tag = [_]Tag{
-        .@"true",
-        .@"false",
+        .true,
+        .false,
     };
 
     try testScanner(code, &expected_str, &expected_tag);
@@ -898,7 +898,7 @@ test "boolean logic" {
     };
     const expected_tag = [_]Tag{
         .@"and",
-        .@"not",
+        .not,
         .@"or",
     };
 

@@ -204,7 +204,7 @@ pub fn testAst(ast: Ast, expected: []const Node) !void {
     }
 
     // start with the first node since 0 is always root
-    for (ast.nodes) |n, i| {
+    for (ast.nodes, 0..) |n, i| {
         const e = expected[i];
         std.testing.expect(e.tag == n.tag) catch |err| {
             std.debug.print("tag missmatch: node[{}] expected {}, got {}\n", .{
@@ -239,7 +239,7 @@ pub fn testAst(ast: Ast, expected: []const Node) !void {
 
 pub fn print(ast: Ast) void {
     std.debug.print("tree:\n", .{});
-    for (ast.nodes) |n, i| {
+    for (ast.nodes, 0..) |n, i| {
         //if (n.tag == .symbol) {
         std.debug.print("{} {}[l: {} r: {}] ;; {s} [{}]\n", .{
             i,
@@ -267,7 +267,7 @@ pub fn pprint(ast: Ast) void {
 
 pub fn printTokens(ast: Ast) void {
     std.debug.print("tokens:\n", .{});
-    for (ast.tokens) |t, i| {
+    for (ast.tokens, 0..) |t, i| {
         std.debug.print("[{}]: ", .{i});
         t.print();
     }
