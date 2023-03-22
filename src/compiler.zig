@@ -70,7 +70,7 @@ pub const Compiler = struct {
     // and instead only using them for locals
     fn freeReg(self: *Compiler) void {
         if (self.last_reg == 0) {
-            std.debug.print("attempt to free last register\n", .{});
+            // std.debug.print("attempt to free last register\n", .{});
             return;
         }
         self.last_reg -= 1;
@@ -1073,7 +1073,7 @@ test "locals" {
     const code =
         \\(let ((x 33)
         \\      (y 44))
-        \\          (+ x y))
+        \\          (+ x 10 y))
     ;
     var parser = Parser.init(testing.allocator);
     defer parser.deinit();
@@ -1093,6 +1093,9 @@ test "locals" {
         Inst.init(.load, .{ .r = 1, .u = 0 }),
         // load 44 into reg 2
         Inst.init(.load, .{ .r = 2, .u = 1 }),
+
+        // add 10
+        Inst.init(.addconst, .{ .r = 3, .u = 2 }),
 
         // add the two registers
         Inst.init(.add, .{ .r = 3, .r1 = 1, .r2 = 2 }),

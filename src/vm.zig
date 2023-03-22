@@ -520,7 +520,6 @@ test "nested arithmetic" {
     try testing.expect(chunk.consts[5].float == 2);
 
     try vm.exec(&chunk);
-    chunk.disassemble();
 
     try testing.expectEqualSlices(Inst, &.{
         // reserve reg 1 for result of addition
