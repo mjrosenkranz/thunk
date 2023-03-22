@@ -283,6 +283,7 @@ pub fn parseForm(
         .define => try self.parseDefine(),
         .set => try self.parseSet(),
         .let => try self.parseLet(),
+        .lambda => try self.parseLambda(),
         // otherwise, it's safe to assume that this is
         // a not a special form and thus a call
         else => blk: {
@@ -344,7 +345,7 @@ pub fn parseLet(
 ) ParseError!NodeIdx {
     // save this for later when we have to patch the then and else branches
     const let_idx = @intCast(NodeIdx, self.nodes.items.len);
-    // push the if statement to the tree
+    // push the let statement to the tree
     try self.nodes.append(.{
         .tag = .let,
         .children = .{},
@@ -426,6 +427,69 @@ pub fn parseBinding(
     try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     return binding_idx;
+}
+
+pub fn parseLambda(
+    self: *Parser,
+) ParseError!NodeIdx {
+    // save this for later when we have to patch the then and else branches
+    const lambda_idx = @intCast(NodeIdx, self.nodes.items.len);
+    // push the lambda statement to the tree
+    try self.nodes.append(.{
+        .tag = .lambda,
+        .children = .{},
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    // should not failt to consume let
+    try self.consume(.lambda, ParseError.SyntaxError);
+
+    // TODO: support single arg which captures whole list
+
+    const formals_list_idx = @intCast(NodeIdx, self.nodes.items.len);
+    try self.nodes.append(.{
+        .tag = .pair,
+        .children = .{
+            .l = 0,
+            .r = 0,
+        },
+        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+    });
+    // beginning of assoc list
+    try self.consume(.lparen, ParseError.ExpectedOpenParen);
+
+    var tail_idx = formals_list_idx;
+
+    // first binding:
+    while (!(self.match(.rparen) or self.match(.eof))) {
+        var pair = &self.nodes.items[tail_idx];
+        self.curr.print();
+        if (pair.children.l != 0) {
+            // old pair right points to new one
+            tail_idx = @intCast(NodeIdx, self.nodes.items.len);
+            pair.children.r = tail_idx;
+
+            // create the new on
+            try self.nodes.append(.{
+                .tag = .pair,
+                .children = .{},
+                .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+            });
+        }
+        // should be a symbol
+        const arg_idx = try parseSymbol(self);
+        self.nodes.items[tail_idx].children.l = arg_idx;
+    }
+
+    // end of the list
+    try self.consume(.rparen, ParseError.ExpectedCloseParen);
+
+    const body_idx = try self.parseSeq();
+
+    // set the left to the list
+    self.nodes.items[lambda_idx].children.l = formals_list_idx;
+    self.nodes.items[lambda_idx].children.r = body_idx;
+
+    return lambda_idx;
 }
 
 /// parse a conditional statement

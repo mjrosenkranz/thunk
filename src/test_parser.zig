@@ -1027,3 +1027,61 @@ test "let expression multiple binding" {
     };
     try ast.testAst(&expected);
 }
+
+test "simple lambda" {
+    const code =
+        \\(lambda (a b c) a)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .lambda,
+            .token_idx = 1,
+            .children = .{
+                .l = 2,
+                .r = 10,
+            },
+        },
+    };
+    try ast.testAst(&expected);
+}
+
+// test "single lambda" {
+//     const code =
+//         \\(lambda x x)
+//     ;
+//     var parser = Parser.init(std.testing.allocator);
+//     defer parser.deinit();
+//     var ast = try parser.parse(code);
+//     defer ast.deinit(std.testing.allocator);
+//
+//     const expected = [_]Node{
+//         // 0
+//         .{
+//             .tag = .seq,
+//             .token_idx = 0,
+//             .children = .{ .l = 1 },
+//         },
+//         // 1
+//         .{
+//             .tag = .lambda,
+//             .token_idx = 1,
+//             .children = .{
+//                 .l = 2,
+//                 .r = 10,
+//             },
+//         },
+//     };
+//     try ast.testAst(&expected);
+// }

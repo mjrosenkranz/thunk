@@ -38,6 +38,8 @@ pub const Scanner = struct {
     buf: []const u8,
 
     pub fn next(self: *Self) Token {
+        // TODO: there is some interesting break blk: stuff
+        // we can do to make this flow better
         self.start = self.offset;
 
         var tok = Token{
@@ -327,11 +329,13 @@ pub const Scanner = struct {
                     return .@"and";
                 }
             },
+
             'b' => {
                 if (self.compareId("begin")) {
                     return .begin;
                 }
             },
+
             'c' => {
                 if (self.incOffset()) |c| {
                     switch (c) {
@@ -347,11 +351,6 @@ pub const Scanner = struct {
                         },
                         else => {},
                     }
-                }
-            },
-            'i' => {
-                if (self.compareId("if")) {
-                    return .@"if";
                 }
             },
 
@@ -371,6 +370,13 @@ pub const Scanner = struct {
                     }
                 }
             },
+
+            'i' => {
+                if (self.compareId("if")) {
+                    return .@"if";
+                }
+            },
+
             'l' => {
                 if (self.incOffset()) |c| {
                     switch (c) {
@@ -398,16 +404,19 @@ pub const Scanner = struct {
                     }
                 }
             },
+
             'n' => {
                 if (self.compareId("not")) {
                     return .not;
                 }
             },
+
             'o' => {
                 if (self.compareId("or")) {
                     return .@"or";
                 }
             },
+
             's' => {
                 if (self.compareId("set!")) {
                     return .set;
@@ -492,11 +501,7 @@ pub fn testScanner(
     for (strs, 0..) |str, i| {
         const t = scan.next();
         if (str.len > 0) {
-            try testing.expect(std.mem.eql(
-                u8,
-                t.loc.slice,
-                str,
-            ));
+            try testing.expectEqualSlices(u8, t.loc.slice, str);
         }
         try testing.expect(t.tag == tags[i]);
     }
@@ -514,11 +519,11 @@ pub fn testScannerLoc(
     for (strs, 0..) |str, i| {
         const t = scan.next();
         if (str.len > 0) {
-            try testing.expect(std.mem.eql(
+            try testing.expectEqualSlices(
                 u8,
                 t.loc.slice,
                 str,
-            ));
+            );
         }
         try testing.expect(t.tag == tags[i]);
         if (t.loc.line != locs[i].line) {
@@ -942,7 +947,7 @@ test "if" {
 
 test "positions" {
     const code =
-        \\(if (> 2 37)
+        \\(if (> 2 a)
         \\    thn
         \\    els)
     ;
@@ -953,7 +958,7 @@ test "positions" {
         "(",
         ">",
         "2",
-        "37",
+        "a",
         ")",
         "thn",
         "els",
@@ -966,7 +971,7 @@ test "positions" {
         .lparen,
         .gt,
         .number,
-        .number,
+        .symbol,
         .rparen,
         .symbol,
         .symbol,
@@ -981,7 +986,7 @@ test "positions" {
         .{ .line = 1, .col = 6 },
         .{ .line = 1, .col = 8 },
         .{ .line = 1, .col = 10 },
-        .{ .line = 1, .col = 12 },
+        .{ .line = 1, .col = 11 },
         .{ .line = 2, .col = 5 },
         .{ .line = 3, .col = 5 },
         .{ .line = 3, .col = 8 },
@@ -989,4 +994,37 @@ test "positions" {
     };
 
     try testScannerLoc(code, &expected_str, &expected_tag, &expected_locs);
+}
+
+test "lambda" {
+    const code =
+        \\(lambda (a b c) a)
+    ;
+
+    const expected_str = [_][]const u8{
+        "(",
+        "lambda",
+        "(",
+        "a",
+        "b",
+        "c",
+        ")",
+        "a",
+        ")",
+        "",
+    };
+    const expected_tag = [_]Tag{
+        .lparen,
+        .lambda,
+        .lparen,
+        .symbol,
+        .symbol,
+        .symbol,
+        .rparen,
+        .symbol,
+        .rparen,
+        .eof,
+    };
+
+    try testScanner(code, &expected_str, &expected_tag);
 }

@@ -96,6 +96,10 @@ pub const Node = struct {
         /// l is the assoc list of bindings
         /// r is the body, a sequence
         let,
+        /// creates a functioon!
+        /// l is the formals
+        /// r is the body, a sequence
+        lambda,
     };
 
     pub fn pprint(n: Node, i: NodeIdx, ast: *const Ast) void {
