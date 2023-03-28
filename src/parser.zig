@@ -468,11 +468,18 @@ pub fn parseLambda(
         var tail_idx = formals_list_idx;
 
         // first binding:
-        while (true) {
+        inner: while (true) {
             if (self.match(.rparen) or self.match(.eof)) {
-                // end of the list
-                try self.consume(.rparen, ParseError.ExpectedCloseParen);
-                break :blk;
+                break :inner;
+            }
+
+            if (self.match(.period)) {
+                try self.consume(.period, ParseError.SyntaxError);
+
+                const arg_idx = try parseSymbol(self);
+                self.nodes.items[tail_idx].children.r = arg_idx;
+
+                break :inner;
             }
 
             var pair = &self.nodes.items[tail_idx];
@@ -492,6 +499,9 @@ pub fn parseLambda(
             const arg_idx = try parseSymbol(self);
             self.nodes.items[tail_idx].children.l = arg_idx;
         }
+
+        // end of the list
+        try self.consume(.rparen, ParseError.ExpectedCloseParen);
     }
 
     const body_idx = try self.parseSeq();

@@ -197,6 +197,13 @@ pub const Node = struct {
             .set => {
                 std.debug.print("set! ", .{});
             },
+            .lambda => {
+                std.debug.print("(lambda (", .{});
+                ast.nodes[n.children.l].pprint(n.children.l, ast);
+                std.debug.print(") ", .{});
+                ast.nodes[n.children.r].pprint(n.children.r, ast);
+                std.debug.print(")\n ", .{});
+            },
         }
     }
 };

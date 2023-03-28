@@ -1159,3 +1159,80 @@ test "single lambda" {
     };
     try ast.testAst(&expected);
 }
+
+test "period lambda" {
+    const code =
+        \\(lambda (a b . c) a)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .lambda,
+            .token_idx = 1,
+            .children = .{
+                .l = 2,
+                .r = 7,
+            },
+        },
+        // 2
+        .{
+            .tag = .pair,
+            .token_idx = 2,
+            .children = .{
+                .l = 3,
+                .r = 4,
+            },
+        },
+        // 3
+        .{
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+        // 4
+        .{
+            .tag = .pair,
+            .token_idx = 4,
+            .children = .{
+                .l = 5,
+                .r = 6,
+            },
+        },
+        // 5
+        .{
+            .tag = .symbol,
+            .token_idx = 4,
+            .children = .{},
+        },
+        // 6
+        .{
+            .tag = .symbol,
+            .token_idx = 6,
+            .children = .{},
+        },
+        // 7
+        .{
+            .tag = .seq,
+            .token_idx = 8,
+            .children = .{ .l = 8 },
+        },
+        // 8
+        .{
+            .tag = .symbol,
+            .token_idx = 8,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
+}
