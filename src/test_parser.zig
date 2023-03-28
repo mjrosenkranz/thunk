@@ -1050,8 +1050,64 @@ test "simple lambda" {
             .token_idx = 1,
             .children = .{
                 .l = 2,
-                .r = 10,
+                .r = 8,
             },
+        },
+        // 2
+        .{
+            .tag = .pair,
+            .token_idx = 2,
+            .children = .{
+                .l = 3,
+                .r = 4,
+            },
+        },
+        // 3
+        .{
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+        // 4
+        .{
+            .tag = .pair,
+            .token_idx = 4,
+            .children = .{
+                .l = 5,
+                .r = 6,
+            },
+        },
+        // 5
+        .{
+            .tag = .symbol,
+            .token_idx = 4,
+            .children = .{},
+        },
+        // 6
+        .{
+            .tag = .pair,
+            .token_idx = 5,
+            .children = .{
+                .l = 7,
+            },
+        },
+        // 7
+        .{
+            .tag = .symbol,
+            .token_idx = 5,
+            .children = .{},
+        },
+        // 8
+        .{
+            .tag = .seq,
+            .token_idx = 7,
+            .children = .{ .l = 9 },
+        },
+        // 9
+        .{
+            .tag = .symbol,
+            .token_idx = 7,
+            .children = .{},
         },
     };
     try ast.testAst(&expected);

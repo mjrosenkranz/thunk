@@ -143,7 +143,6 @@ pub const Value = union(ValueType) {
 test "assert" {
     // const v = Value{ .float = 123 };
     // try Value.assertType(.float, v);
-    std.debug.print("{}\n", .{@sizeOf(Value)});
     try std.testing.expect(@sizeOf(Value) == 16);
 }
 

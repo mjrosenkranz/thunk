@@ -792,8 +792,5 @@ test "set global" {
 
     try vm.exec(&chunk);
 
-    vm.env.map.get("global").?.print();
-    std.debug.print("\n", .{});
-
     try testing.expect(vm.env.map.get("global").?.float == 32);
 }

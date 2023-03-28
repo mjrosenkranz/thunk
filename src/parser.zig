@@ -462,7 +462,6 @@ pub fn parseLambda(
     // first binding:
     while (!(self.match(.rparen) or self.match(.eof))) {
         var pair = &self.nodes.items[tail_idx];
-        self.curr.print();
         if (pair.children.l != 0) {
             // old pair right points to new one
             tail_idx = @intCast(NodeIdx, self.nodes.items.len);
