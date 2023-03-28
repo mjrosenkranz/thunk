@@ -1113,31 +1113,49 @@ test "simple lambda" {
     try ast.testAst(&expected);
 }
 
-// test "single lambda" {
-//     const code =
-//         \\(lambda x x)
-//     ;
-//     var parser = Parser.init(std.testing.allocator);
-//     defer parser.deinit();
-//     var ast = try parser.parse(code);
-//     defer ast.deinit(std.testing.allocator);
-//
-//     const expected = [_]Node{
-//         // 0
-//         .{
-//             .tag = .seq,
-//             .token_idx = 0,
-//             .children = .{ .l = 1 },
-//         },
-//         // 1
-//         .{
-//             .tag = .lambda,
-//             .token_idx = 1,
-//             .children = .{
-//                 .l = 2,
-//                 .r = 10,
-//             },
-//         },
-//     };
-//     try ast.testAst(&expected);
-// }
+test "single lambda" {
+    const code =
+        \\(lambda x x)
+    ;
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var ast = try parser.parse(code);
+    defer ast.deinit(std.testing.allocator);
+
+    const expected = [_]Node{
+        // 0
+        .{
+            .tag = .seq,
+            .token_idx = 0,
+            .children = .{ .l = 1 },
+        },
+        // 1
+        .{
+            .tag = .lambda,
+            .token_idx = 1,
+            .children = .{
+                .l = 2,
+                .r = 3,
+            },
+        },
+        // 2
+        .{
+            .tag = .symbol,
+            .token_idx = 2,
+            .children = .{},
+        },
+        // 3
+        .{
+            .tag = .seq,
+            .token_idx = 3,
+            .children = .{ .l = 4 },
+        },
+        // 4
+        .{
+            .tag = .symbol,
+            .token_idx = 3,
+            .children = .{},
+        },
+    };
+    try ast.testAst(&expected);
+}

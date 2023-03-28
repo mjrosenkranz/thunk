@@ -24,10 +24,11 @@ pub const ParseError = error{
     ExpectedOpenParen,
     ExpectedCloseParen,
     ExpectedNumber,
-    FormFailed,
-    ExceededMaxArgs,
     ExpectedBegin,
     ExpectedIf,
+    ExpectedSymbol,
+    ExceededMaxArgs,
+    FormFailed,
 
     SyntaxError,
 } || Allocator.Error || error{NotYetImplemented};
@@ -90,7 +91,7 @@ pub inline fn consume(self: *Parser, tag: Token.Tag, err: ParseError) ParseError
         return;
     }
 
-    std.debug.print("expected: {} got {}\n", .{ tag, self.curr.tag });
+    // std.debug.print("expected: {} got {}\n", .{ tag, self.curr.tag });
     return err;
 }
 
@@ -446,41 +447,52 @@ pub fn parseLambda(
     // TODO: support single arg which captures whole list
 
     const formals_list_idx = @intCast(NodeIdx, self.nodes.items.len);
-    try self.nodes.append(.{
-        .tag = .pair,
-        .children = .{
-            .l = 0,
-            .r = 0,
-        },
-        .token_idx = @intCast(NodeIdx, self.tokens.items.len),
-    });
-    // beginning of assoc list
-    try self.consume(.lparen, ParseError.ExpectedOpenParen);
+    blk: {
 
-    var tail_idx = formals_list_idx;
+        // beginning of assoc list
+        self.consume(.lparen, ParseError.ExpectedOpenParen) catch {
+            _ = try parseSymbol(self);
 
-    // first binding:
-    while (!(self.match(.rparen) or self.match(.eof))) {
-        var pair = &self.nodes.items[tail_idx];
-        if (pair.children.l != 0) {
-            // old pair right points to new one
-            tail_idx = @intCast(NodeIdx, self.nodes.items.len);
-            pair.children.r = tail_idx;
+            break :blk;
+        };
 
-            // create the new on
-            try self.nodes.append(.{
-                .tag = .pair,
-                .children = .{},
-                .token_idx = @intCast(NodeIdx, self.tokens.items.len),
-            });
+        try self.nodes.append(.{
+            .tag = .pair,
+            .children = .{
+                .l = 0,
+                .r = 0,
+            },
+            .token_idx = @intCast(NodeIdx, self.tokens.items.len - 1),
+        });
+
+        var tail_idx = formals_list_idx;
+
+        // first binding:
+        while (true) {
+            if (self.match(.rparen) or self.match(.eof)) {
+                // end of the list
+                try self.consume(.rparen, ParseError.ExpectedCloseParen);
+                break :blk;
+            }
+
+            var pair = &self.nodes.items[tail_idx];
+            if (pair.children.l != 0) {
+                // old pair right points to new one
+                tail_idx = @intCast(NodeIdx, self.nodes.items.len);
+                pair.children.r = tail_idx;
+
+                // create the new on
+                try self.nodes.append(.{
+                    .tag = .pair,
+                    .children = .{},
+                    .token_idx = @intCast(NodeIdx, self.tokens.items.len),
+                });
+            }
+            // should be a symbol
+            const arg_idx = try parseSymbol(self);
+            self.nodes.items[tail_idx].children.l = arg_idx;
         }
-        // should be a symbol
-        const arg_idx = try parseSymbol(self);
-        self.nodes.items[tail_idx].children.l = arg_idx;
     }
-
-    // end of the list
-    try self.consume(.rparen, ParseError.ExpectedCloseParen);
 
     const body_idx = try self.parseSeq();
 
