@@ -177,7 +177,7 @@ pub const Scanner = struct {
                         if (c == '.') {
                             state = .period;
                         } else {
-                            self.offset -= 1;
+                            self.retract();
                             break;
                         }
                     }
@@ -185,7 +185,7 @@ pub const Scanner = struct {
                 .identifier => {
                     if (self.maybe_identifier()) |id_tag| {
                         tok.tag = id_tag;
-                        self.offset -= 1;
+                        self.retract();
                         break;
                     } else {
                         state = .symbol;
@@ -194,14 +194,14 @@ pub const Scanner = struct {
                 .symbol => {
                     tok.tag = .symbol;
                     if (!is_symbol(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         break;
                     }
                 },
                 .keyword => {
                     tok.tag = .keyword;
                     if (!is_symbol(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         break;
                     }
                 },
@@ -221,7 +221,7 @@ pub const Scanner = struct {
                     // if we hit a delimiter then this is
                     // an identifier
                     if (is_delim(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         break;
                     }
 
@@ -238,7 +238,7 @@ pub const Scanner = struct {
                     // if we hit a delimiter then this is
                     // a period
                     if (is_delim(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         tok.tag = .period;
                         break;
                     } else if (is_digit(c)) {
@@ -252,7 +252,7 @@ pub const Scanner = struct {
                 },
                 .greater => {
                     if (is_delim(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         tok.tag = .gt;
                         break;
                     } else if (c == '=') {
@@ -266,7 +266,7 @@ pub const Scanner = struct {
                 },
                 .less => {
                     if (is_delim(c)) {
-                        self.offset -= 1;
+                        self.retract();
                         tok.tag = .lt;
                         break;
                     } else if (c == '=') {
@@ -371,16 +371,16 @@ pub const Scanner = struct {
             'd' => {
                 if (self.advance()) |c| {
                     switch (c) {
-                        'o' => {
-                            self.offset += 1;
-                            return .do;
-                        },
                         'e' => {
                             if (self.compareId("efine")) {
                                 return .define;
                             }
                         },
                         else => {
+                            if (self.compareId("o")) {
+                                return .do;
+                            }
+
                             self.retract();
                         },
                     }
